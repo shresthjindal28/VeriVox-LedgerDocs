@@ -519,6 +519,7 @@ export function useVoiceCall(documentId: string) {
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef<boolean>(false);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   
   const [callState, setCallState] = useState<CallState>('idle');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -532,6 +533,23 @@ export function useVoiceCall(documentId: string) {
   
   const callStartTimeRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clear audio queue and stop current playback
+  const clearAudioQueue = useCallback(() => {
+    // Stop current playback
+    if (currentSourceRef.current) {
+      try {
+        currentSourceRef.current.stop();
+      } catch (e) {
+        // Source may already be stopped
+      }
+      currentSourceRef.current = null;
+    }
+    
+    // Clear queue
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+  }, []);
 
   // Process audio queue sequentially to prevent overlapping playback
   const processAudioQueue = useCallback(async () => {
@@ -562,19 +580,32 @@ export function useVoiceCall(documentId: string) {
         const source = context.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(gainNode);
+        currentSourceRef.current = source;
         
         // Wait for this chunk to finish before playing next
         await new Promise<void>((resolve, reject) => {
-          source.onended = () => resolve();
-          source.onerror = (e) => reject(e);
+          source.onended = () => {
+            currentSourceRef.current = null;
+            resolve();
+          };
+          source.onerror = (e) => {
+            currentSourceRef.current = null;
+            reject(e);
+          };
           source.start();
         });
       } catch (e) {
+        // If stopped, that's fine - just exit
+        if (e instanceof DOMException && e.name === 'InvalidStateError') {
+          currentSourceRef.current = null;
+          break;
+        }
         console.error('Failed to play audio chunk:', e);
       }
     }
 
     isPlayingRef.current = false;
+    currentSourceRef.current = null;
   }, []);
 
   // Play PCM16 audio (queued)
@@ -615,10 +646,14 @@ export function useVoiceCall(documentId: string) {
         
       case 'state_change':
         if (data.state === 'user_speaking') {
+          // User started speaking - clear any queued AI audio immediately
+          clearAudioQueue();
           setCallState('user_speaking');
         } else if (data.state === 'ai_speaking') {
           setCallState('ai_speaking');
         } else if (data.state === 'processing') {
+          // Processing new response - clear old audio queue
+          clearAudioQueue();
           setCallState('processing');
         } else if (data.state === 'connected') {
           setCallState('connected');
@@ -676,7 +711,7 @@ export function useVoiceCall(documentId: string) {
         // Keep-alive response
         break;
     }
-  }, [playPCM16Audio]);
+  }, [playPCM16Audio, clearAudioQueue]);
 
   // Start call
   const startCall = useCallback(async () => {
@@ -824,9 +859,7 @@ export function useVoiceCall(documentId: string) {
     }
     
     // Clear audio queue and stop playback
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-    gainNodeRef.current = null;
+    clearAudioQueue();
     
     wsRef.current = null;
     audioContextRef.current = null;
@@ -839,10 +872,13 @@ export function useVoiceCall(documentId: string) {
 
   // Interrupt AI
   const interrupt = useCallback(() => {
+    // Clear audio queue immediately when interrupting
+    clearAudioQueue();
+    
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'interrupt' }));
     }
-  }, []);
+  }, [clearAudioQueue]);
 
   // Mute/unmute
   const toggleMute = useCallback(() => {
