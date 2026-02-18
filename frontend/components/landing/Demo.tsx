@@ -14,10 +14,10 @@ export function Demo() {
 
                     <div className="flex-1 space-y-8">
                         <h2 className="text-3xl lg:text-4xl font-bold">
-                            See the Truth in <span className="text-primary">Real-Time</span>
+                            Voice Interaction with <span className="text-primary">Visual Context</span>
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed">
-                            VeriVox doesn't just transcribe; it validates. Watch as our engine detects financial commitments, cross-references them with your blockchain ledger, and flags inconsistencies instantly.
+                            Speak naturally to your PDFs and receive voice responses. Watch as relevant sections highlight in real-time, showing exactly where the AI sourced its answer from your document.
                         </p>
 
                         <div className="space-y-4">
@@ -26,8 +26,8 @@ export function Demo() {
                                     <span className="text-primary font-bold">1</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold">Live Transcription</h4>
-                                    <p className="text-sm text-muted-foreground">Speaker separation and high-fidelity text generation.</p>
+                                    <h4 className="font-bold">Voice-to-Voice Conversation</h4>
+                                    <p className="text-sm text-muted-foreground">Real-time speech-to-text and text-to-speech with bidirectional audio streaming.</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
@@ -35,8 +35,8 @@ export function Demo() {
                                     <span className="text-primary font-bold">2</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold">Fact Checking</h4>
-                                    <p className="text-sm text-muted-foreground">Real-time verification against your hashed documents.</p>
+                                    <h4 className="font-bold">Document-Bound RAG Response</h4>
+                                    <p className="text-sm text-muted-foreground">AI answers sourced exclusively from your PDF with visual highlight synchronization.</p>
                                 </div>
                             </div>
                         </div>
@@ -55,21 +55,21 @@ export function Demo() {
                             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-muted/30">
                                 <div className="flex items-center gap-2">
                                     <FileCheck className="size-4 text-brand-700" />
-                                    <span className="text-xs font-mono">board_meeting_q3.wav</span>
+                                    <span className="text-xs font-mono">resume_john_doe.pdf</span>
                                 </div>
-                                <div className="text-xs text-muted-foreground">00:14 / 45:00</div>
+                                <div className="text-xs text-muted-foreground">Voice Session Active</div>
                             </div>
 
                             {/* Chat/Transcript Interface */}
                             <div className="p-6 space-y-6">
                                 <div className="flex gap-4">
                                     <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-800 flex items-center justify-center text-xs font-bold">
-                                        JS
+                                        U
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-sm font-semibold text-foreground/80">John Smith (CFO)</p>
+                                        <p className="text-sm font-semibold text-foreground/80">You (Voice)</p>
                                         <p className="text-sm text-muted-foreground">
-                                            Based on current projections, we are expecting a <span className={`bg-brand-500/10 text-brand-700 px-1 rounded transition-colors ${isPlaying ? 'bg-brand-500/20 shadow-[0_0_10px_rgba(144,169,85,0.2)]' : ''}`}>15% increase in Q3 revenue</span> compared to last year.
+                                            What programming languages are mentioned in this resume?
                                         </p>
                                     </div>
                                 </div>
@@ -79,14 +79,17 @@ export function Demo() {
                                         AI
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-sm font-semibold text-primary">VeriVox Intelligence</p>
+                                        <p className="text-sm font-semibold text-primary">VeriVox LedgerDocs</p>
                                         <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 text-sm">
                                             <div className="flex items-center gap-2 text-primary font-medium mb-1">
                                                 <FileCheck className="size-3" />
-                                                Verified against Ledger #8892
+                                                Sourced from resume_john_doe.pdf
                                             </div>
-                                            <p className="text-muted-foreground text-xs">
-                                                This aligns with the '2024_Financial_Forecast.pdf' hashed on 01/15/2024.
+                                            <p className="text-muted-foreground text-xs mb-2">
+                                                The resume mentions: <span className={`bg-brand-500/10 text-brand-700 px-1 rounded transition-colors ${isPlaying ? 'bg-brand-500/20 shadow-[0_0_10px_rgba(144,169,85,0.2)]' : ''}`}>Python, JavaScript, TypeScript, and Go</span>
+                                            </p>
+                                            <p className="text-muted-foreground text-xs italic">
+                                                Highlighted sections: Page 1, Skills section (lines 12-15)
                                             </p>
                                         </div>
                                     </div>

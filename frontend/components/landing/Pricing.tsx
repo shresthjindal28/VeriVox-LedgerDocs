@@ -20,9 +20,9 @@ export function Pricing() {
                             <div className="text-4xl font-bold mt-4">$0 <span className="text-lg font-normal text-muted-foreground">/mo</span></div>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm text-left flex-1">
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> 5 Hours of Transcription</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Basic RAG Search</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Email Support</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> 5 Hours Voice Sessions</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Document-Bound RAG</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Basic Extraction</div>
                             <div className="flex items-center gap-2 text-muted-foreground"><Check className="size-4 text-muted-foreground opacity-50" /> Blockchain Verification</div>
                         </CardContent>
                         <CardFooter>
@@ -41,10 +41,10 @@ export function Pricing() {
                             <div className="text-4xl font-bold mt-4">$49 <span className="text-lg font-normal text-muted-foreground">/mo</span></div>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm text-left flex-1">
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Unlimited Transcription</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Unlimited Voice Sessions</div>
                             <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Blockchain Verification</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Advanced RAG & Insights</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Priority Support</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Exhaustive Structured Extraction</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Visual Highlight Sync</div>
                         </CardContent>
                         <CardFooter>
                             <Button className="w-full">Start Free Trial</Button>
@@ -59,10 +59,10 @@ export function Pricing() {
                             <div className="text-4xl font-bold mt-4">Custom</div>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm text-left flex-1">
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Custom Retention Policies</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Custom RAG Models</div>
                             <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Dedicated Account Manager</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> SSO & Audit Logs</div>
-                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> On-Premise Deployment</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> SSO & Session Audit Logs</div>
+                            <div className="flex items-center gap-2"><Check className="size-4 text-primary" /> Private Blockchain Node</div>
                         </CardContent>
                         <CardFooter>
                             <Button variant="outline" className="w-full">Contact Sales</Button>
