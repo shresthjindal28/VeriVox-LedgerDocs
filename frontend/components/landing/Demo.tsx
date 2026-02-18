@@ -17,7 +17,7 @@ export function Demo() {
                             Voice Interaction with <span className="text-primary">Visual Context</span>
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed">
-                            Speak naturally to your PDFs and receive voice responses. Watch as relevant sections highlight in real-time, showing exactly where the AI sourced its answer from your document.
+                            Real-time bidirectional voice-to-voice interaction with PDFs using document-bound RAG. Watch as relevant sections highlight synchronously with AI responses, showing exactly which document passages were used to generate each answer.
                         </p>
 
                         <div className="space-y-4">
@@ -26,8 +26,8 @@ export function Demo() {
                                     <span className="text-primary font-bold">1</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold">Voice-to-Voice Conversation</h4>
-                                    <p className="text-sm text-muted-foreground">Real-time speech-to-text and text-to-speech with bidirectional audio streaming.</p>
+                                    <h4 className="font-bold">Real-Time Voice-to-Voice Interaction</h4>
+                                    <p className="text-sm text-muted-foreground">Bidirectional audio streaming with real-time speech-to-text (STT) and text-to-speech (TTS). Speak naturally and receive immediate spoken responses sourced from your documents.</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
@@ -35,8 +35,8 @@ export function Demo() {
                                     <span className="text-primary font-bold">2</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold">Document-Bound RAG Response</h4>
-                                    <p className="text-sm text-muted-foreground">AI answers sourced exclusively from your PDF with visual highlight synchronization.</p>
+                                    <h4 className="font-bold">Strict Document-Bound RAG with Visual Sync</h4>
+                                    <p className="text-sm text-muted-foreground">AI responses retrieved exclusively from your PDF using RAG—no external knowledge. Visual highlights synchronize in real-time, showing precise page and paragraph references for each answer.</p>
                                 </div>
                             </div>
                         </div>
@@ -89,7 +89,7 @@ export function Demo() {
                                                 The resume mentions: <span className={`bg-brand-500/10 text-brand-700 px-1 rounded transition-colors ${isPlaying ? 'bg-brand-500/20 shadow-[0_0_10px_rgba(144,169,85,0.2)]' : ''}`}>Python, JavaScript, TypeScript, and Go</span>
                                             </p>
                                             <p className="text-muted-foreground text-xs italic">
-                                                Highlighted sections: Page 1, Skills section (lines 12-15)
+                                                Visual highlight sync: Page 1, Skills section (lines 12-15). Response sourced exclusively from document-bound RAG.
                                             </p>
                                         </div>
                                     </div>

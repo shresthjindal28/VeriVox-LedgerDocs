@@ -26,28 +26,34 @@ interface NavbarProps {
 export function Navbar({ className }: NavbarProps) {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
+
+  // Hide global navbar on landing page and auth pages which have their own specific navbars
+  if (pathname === '/' || pathname === '/login' || pathname === '/register') {
+    return null;
+  }
+
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isDark, setIsDark] = React.useState(false);
-  
+
   React.useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'));
   }, []);
-  
+
   const toggleTheme = () => {
     setIsDark(!isDark);
     document.documentElement.classList.toggle('dark');
   };
-  
+
   const navLinks = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/documents', label: 'Documents', icon: FileText },
   ];
-  
+
   const handleLogout = () => {
     logout.mutate();
   };
-  
+
   return (
     <nav className={cn('border-b bg-background', className)}>
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
@@ -58,7 +64,7 @@ export function Navbar({ className }: NavbarProps) {
           </div>
           <span className="text-lg font-semibold">Study With Me</span>
         </Link>
-        
+
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-6 md:flex">
           {navLinks.map((link) => (
@@ -77,7 +83,7 @@ export function Navbar({ className }: NavbarProps) {
             </Link>
           ))}
         </div>
-        
+
         {/* Actions */}
         <div className="hidden items-center gap-4 md:flex">
           <Button variant="ghost" size="icon" onClick={toggleTheme}>
@@ -87,7 +93,7 @@ export function Navbar({ className }: NavbarProps) {
               <Moon className="h-4 w-4" />
             )}
           </Button>
-          
+
           {isAuthenticated ? (
             <>
               <Link href="/profile">
@@ -115,7 +121,7 @@ export function Navbar({ className }: NavbarProps) {
             </>
           )}
         </div>
-        
+
         {/* Mobile menu button */}
         <Button
           variant="ghost"
@@ -130,7 +136,7 @@ export function Navbar({ className }: NavbarProps) {
           )}
         </Button>
       </div>
-      
+
       {/* Mobile menu */}
       {isMobileMenuOpen && (
         <div className="border-t px-4 py-4 md:hidden">
@@ -151,9 +157,9 @@ export function Navbar({ className }: NavbarProps) {
                 {link.label}
               </Link>
             ))}
-            
+
             <hr className="my-2" />
-            
+
             {isAuthenticated ? (
               <>
                 <Link

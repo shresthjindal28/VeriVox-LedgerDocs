@@ -21,10 +21,10 @@ export function Navbar() {
                 </div>
 
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-brand-100/80">
-                    <Link href="#features" className="hover:text-brand-500 transition-colors">Features</Link>
-                    <Link href="#infrastructure" className="hover:text-brand-500 transition-colors">Infrastructure</Link>
-                    <Link href="#governance" className="hover:text-brand-500 transition-colors">Governance</Link>
-                    <Link href="#pricing" className="hover:text-brand-500 transition-colors">Pricing</Link>
+                    <Link href="/#features" className="hover:text-brand-500 transition-colors">Features</Link>
+                    <Link href="/#infrastructure" className="hover:text-brand-500 transition-colors">Infrastructure</Link>
+                    <Link href="/#governance" className="hover:text-brand-500 transition-colors">Governance</Link>
+                    <Link href="/#pricing" className="hover:text-brand-500 transition-colors">Pricing</Link>
                 </div>
 
                 <div className="flex items-center gap-6">

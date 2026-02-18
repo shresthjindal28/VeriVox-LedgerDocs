@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Study With Me - AI-Powered PDF Learning",
-  description: "Upload PDFs and chat with AI to understand your documents better",
+  title: "VeriVox LedgerDocs - Voice-to-Voice PDF Interaction with Document-Bound RAG",
+  description: "Real-time bidirectional voice-to-voice interaction with PDFs using strict document-bound RAG. Blockchain-backed document and session integrity with SHA-256 verification. Visual highlight synchronization and exhaustive structured extraction.",
 };
 
 export default function RootLayout({

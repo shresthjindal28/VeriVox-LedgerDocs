@@ -57,8 +57,8 @@ export function Hero() {
                     transition={{ delay: 0.2 }}
                     className="text-lg text-brand-100/60 max-w-2xl mx-auto mb-10 font-light leading-relaxed"
                 >
-                    Real-time voice interaction with PDFs powered by document-bound RAG. <br className="hidden md:block" />
-                    Blockchain-verified integrity, visual highlight sync, and exhaustive structured extraction.
+                    Real-time bidirectional voice-to-voice interaction with PDFs using strict document-bound RAG. <br className="hidden md:block" />
+                    Every response is sourced exclusively from your documents, verified on-chain with SHA-256 hashing, and synchronized with visual highlights in real-time.
                 </motion.p>
 
                 {/* Buttons */}
@@ -92,7 +92,7 @@ export function Hero() {
                     </div>
 
                     <div className="absolute inset-0 top-6 flex items-center justify-center bg-gradient-to-br from-brand-900/20 to-black">
-                        <div className="text-brand-500/20 text-6xl font-bold">PDF VOICE INTERACTION</div>
+                        <div className="text-brand-500/20 text-6xl font-bold">VERIVOX LEDGERDOCS</div>
                     </div>
                     {/* Glow behind image */}
                     <div className="absolute -inset-10 bg-brand-500/20 blur-[100px] -z-10" />

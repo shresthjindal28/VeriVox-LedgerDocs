@@ -3,43 +3,43 @@ import { Mic, Brain, FileText, Eye, Database, Lock, CheckCircle } from "lucide-r
 
 const features = [
     {
-        title: "Voice-to-Voice PDF Interaction",
-        description: "Real-time bidirectional voice conversation with your PDFs. Speak naturally and receive spoken responses with zero latency.",
+        title: "Real-Time Voice-to-Voice Interaction",
+        description: "Bidirectional voice conversation with PDFs using real-time speech-to-text and text-to-speech. Speak naturally and receive immediate spoken responses sourced directly from your document content.",
         icon: <Mic className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["Real-time STT/TTS", "Bidirectional Audio"]
     },
     {
-        title: "Document-Bound RAG",
-        description: "Strict retrieval-augmented generation that operates exclusively within your uploaded documents. No external knowledge, no hallucinations.",
+        title: "Strict Document-Bound RAG",
+        description: "Retrieval-augmented generation constrained exclusively to your uploaded PDFs. The AI cannot access external knowledge bases or training data—only content retrieved from your documents. Every response includes source citations.",
         icon: <Brain className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["Zero External Context", "Source-Verified Responses"]
     },
     {
         title: "Exhaustive Structured Extraction",
-        description: "Automated extraction of skills, projects, certifications, and metadata into structured formats. Parse resumes, contracts, and technical documents with precision.",
+        description: "Automated extraction of structured data including skills, projects, certifications, work experience, and document metadata. Parse resumes, contracts, technical specifications, and legal documents into JSON, CSV, or custom schemas.",
         icon: <FileText className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["Skills & Projects", "Metadata Extraction"]
     },
     {
         title: "Visual Highlight Synchronization",
-        description: "AI responses automatically highlight relevant sections within the PDF viewer. See exactly where answers are sourced in real-time.",
+        description: "AI responses automatically highlight corresponding sections within the PDF viewer in real-time. Visual indicators show exactly which document passages were used to generate each answer, with precise page and paragraph references.",
         icon: <Eye className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["Live Highlighting", "Source Visualization"]
     },
     {
-        title: "Blockchain Document Integrity",
-        description: "Every document and session receives a cryptographic hash on an immutable ledger. Verify authenticity and detect tampering instantly.",
+        title: "Blockchain-Backed Integrity",
+        description: "Every uploaded document and voice session receives a SHA-256 cryptographic hash recorded on an immutable ledger. Verify document authenticity, detect tampering, and prove session integrity with cryptographic proofs.",
         icon: <Database className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["SHA-256 Hashing", "Session Verification"]
     },
     {
-        title: "Secure Authentication & Ownership",
-        description: "Multi-factor authentication with cryptographic ownership validation. Your documents remain yours, verifiably and permanently.",
+        title: "Secure Authentication & Ownership Validation",
+        description: "Multi-factor authentication (MFA) required for all access. Cryptographic ownership validation ensures document ownership is verifiable on-chain. Your documents remain yours with provable, permanent ownership records.",
         icon: <Lock className="size-6 text-brand-950" />,
         color: "bg-brand-500",
         stats: ["MFA Required", "Ownership Proof"]
@@ -55,7 +55,7 @@ export function Features() {
                         AI That Stays <span className="text-brand-500">Within Your Documents</span>
                     </h2>
                     <p className="text-muted-foreground max-w-2xl text-lg font-light">
-                        VeriVox LedgerDocs uses document-bound RAG to ensure every AI response is sourced directly from your PDFs, with blockchain verification for complete integrity.
+                        VeriVox LedgerDocs enforces strict document-bound RAG—no external knowledge, no hallucinations. Every AI response is retrieved exclusively from your uploaded PDFs, with cryptographic verification on an immutable ledger for document and session integrity.
                     </p>
                 </div>
 

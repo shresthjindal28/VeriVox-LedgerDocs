@@ -12,7 +12,7 @@ export function CTA() {
                     Start Talking to Your <span className="text-brand-500">PDFs</span>
                 </h2>
                 <p className="text-lg text-brand-100/80 max-w-2xl mx-auto mb-10 font-light">
-                    Experience real-time voice-to-voice interaction with document-bound AI and blockchain-backed integrity. No external knowledge, no hallucinations—just your documents, verified.
+                    Experience real-time bidirectional voice-to-voice interaction with PDFs using strict document-bound RAG. Every response is sourced exclusively from your documents, verified with SHA-256 blockchain hashing, and synchronized with visual highlights in real-time.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

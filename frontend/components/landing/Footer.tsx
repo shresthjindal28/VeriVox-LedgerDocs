@@ -24,7 +24,7 @@ export function Footer() {
                             <span className="font-bold text-lg text-white">VeriVox</span>
                         </div>
                         <p className="text-brand-100/60 leading-relaxed max-w-xs">
-                            Voice-to-voice PDF interaction with document-bound RAG and blockchain integrity. Your documents, your AI, verifiably yours.
+                            Real-time voice-to-voice interaction with PDFs using strict document-bound RAG. Blockchain-backed document and session integrity with SHA-256 verification. Your documents, your AI, verifiably yours.
                         </p>
                         <div className="flex gap-2 mt-4">
                             <Button size="icon" variant="ghost" className="rounded-full hover:bg-brand-900 hover:text-brand-500 text-brand-100/60">
@@ -59,7 +59,7 @@ export function Footer() {
                     <div>
                         <h4 className="font-bold mb-6 text-white uppercase text-xs tracking-wider">Newsletter</h4>
                         <p className="text-brand-100/60 mb-4 text-xs">
-                            Stay updated on RAG improvements and blockchain features.
+                            Stay updated on document-bound RAG improvements, blockchain verification features, and structured extraction capabilities.
                         </p>
                         <div className="flex items-center gap-2 bg-brand-950/50 border border-brand-800/50 rounded-lg p-1 pl-3 focus-within:border-brand-500 transition-colors">
                             <Input
