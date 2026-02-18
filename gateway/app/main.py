@@ -81,7 +81,7 @@ All endpoints are available through this single gateway (port 8080).
 
 def register_routes(app: FastAPI) -> None:
     """Register all route handlers."""
-    from app.routes import auth, profile, documents, chat, voice, websocket
+    from app.routes import auth, profile, documents, chat, voice, websocket, verification
     
     # API routes
     app.include_router(auth.router)
@@ -89,6 +89,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(documents.router)
     app.include_router(chat.router)
     app.include_router(voice.router)
+    app.include_router(verification.router)
     
     # WebSocket routes
     app.include_router(websocket.router)

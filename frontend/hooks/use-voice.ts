@@ -516,6 +516,9 @@ export function useVoiceCall(documentId: string) {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playbackContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const isPlayingRef = useRef<boolean>(false);
+  const gainNodeRef = useRef<GainNode | null>(null);
   
   const [callState, setCallState] = useState<CallState>('idle');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -530,13 +533,53 @@ export function useVoiceCall(documentId: string) {
   const callStartTimeRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Play PCM16 audio
+  // Process audio queue sequentially to prevent overlapping playback
+  const processAudioQueue = useCallback(async () => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) {
+      return;
+    }
+
+    if (!playbackContextRef.current) {
+      playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
+      gainNodeRef.current = playbackContextRef.current.createGain();
+      gainNodeRef.current.connect(playbackContextRef.current.destination);
+      gainNodeRef.current.gain.value = 1.0;
+    }
+
+    isPlayingRef.current = true;
+    const context = playbackContextRef.current;
+    const gainNode = gainNodeRef.current!;
+
+    while (audioQueueRef.current.length > 0) {
+      const float32Data = audioQueueRef.current.shift()!;
+      
+      try {
+        // Create audio buffer
+        const audioBuffer = context.createBuffer(1, float32Data.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Data);
+        
+        // Create source and play
+        const source = context.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(gainNode);
+        
+        // Wait for this chunk to finish before playing next
+        await new Promise<void>((resolve, reject) => {
+          source.onended = () => resolve();
+          source.onerror = (e) => reject(e);
+          source.start();
+        });
+      } catch (e) {
+        console.error('Failed to play audio chunk:', e);
+      }
+    }
+
+    isPlayingRef.current = false;
+  }, []);
+
+  // Play PCM16 audio (queued)
   const playPCM16Audio = useCallback(async (base64Data: string) => {
     try {
-      if (!playbackContextRef.current) {
-        playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
-      }
-      
       // Decode base64 to ArrayBuffer
       const binaryString = atob(base64Data);
       const bytes = new Uint8Array(binaryString.length);
@@ -551,18 +594,15 @@ export function useVoiceCall(documentId: string) {
         float32[i] = pcm16[i] / 32768;
       }
       
-      // Create audio buffer and play
-      const audioBuffer = playbackContextRef.current.createBuffer(1, float32.length, 24000);
-      audioBuffer.getChannelData(0).set(float32);
+      // Add to queue
+      audioQueueRef.current.push(float32);
       
-      const source = playbackContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(playbackContextRef.current.destination);
-      source.start();
+      // Process queue
+      processAudioQueue();
     } catch (e) {
-      console.error('Failed to play PCM16 audio:', e);
+      console.error('Failed to queue PCM16 audio:', e);
     }
-  }, []);
+  }, [processAudioQueue]);
 
   // Handle WebSocket messages
   const handleMessage = useCallback((data: CallMessage) => {
@@ -661,31 +701,69 @@ export function useVoiceCall(documentId: string) {
       });
       streamRef.current = stream;
       
-      // Set up WebSocket
-      const token = localStorage.getItem('auth_token');
+      // Set up WebSocket (browsers cannot set headers; pass token in query for gateway auth)
+      const token =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('access_token') || localStorage.getItem('auth_token')
+          : null;
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
-      const ws = new WebSocket(`${wsUrl}/ws/voice/call/${documentId}`, token ? [token] : undefined);
+      const path = `/ws/voice/call/${documentId}`;
+      const url = token ? `${wsUrl}${path}?token=${encodeURIComponent(token)}` : `${wsUrl}${path}`;
+      const ws = new WebSocket(url);
       
-      ws.onopen = () => {
-        // Send start_call message
+      // Track if call has been started (wait for call_started message)
+      let callStarted = false;
+      
+      ws.onopen = async () => {
+        // Send start_call message immediately when WebSocket opens
+        console.log('WebSocket opened, sending start_call');
         ws.send(JSON.stringify({ type: 'start_call' }));
         
-        // Start call duration timer
-        callStartTimeRef.current = Date.now();
-        durationIntervalRef.current = setInterval(() => {
-          if (callStartTimeRef.current) {
-            setCallDuration(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
+        // Set up AudioWorklet AFTER WebSocket is open
+        // But don't start sending audio until call_started is received
+        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+        
+        // Create worklet from inline code
+        const blob = new Blob([PCM16_WORKLET_CODE], { type: 'application/javascript' });
+        const workletUrl = URL.createObjectURL(blob);
+        await audioContextRef.current.audioWorklet.addModule(workletUrl);
+        URL.revokeObjectURL(workletUrl);
+        
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        const workletNode = new AudioWorkletNode(audioContextRef.current, 'pcm16-processor');
+        
+        workletNode.port.onmessage = (event) => {
+          // Only send audio chunks after call has been started
+          if (callStarted && !isMuted && ws.readyState === WebSocket.OPEN && event.data.pcm16) {
+            // Convert ArrayBuffer to base64
+            const bytes = new Uint8Array(event.data.pcm16);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64 = btoa(binary);
+            
+            ws.send(JSON.stringify({
+              type: 'audio_chunk',
+              data: base64
+            }));
           }
-        }, 1000);
+        };
+        
+        source.connect(workletNode);
+        workletNode.connect(audioContextRef.current.destination);
+        workletNodeRef.current = workletNode;
       };
       
       ws.onclose = () => {
+        callStarted = false;
         if (callState !== 'ended') {
           setCallState('ended');
         }
       };
       
       ws.onerror = () => {
+        callStarted = false;
         setError('Connection error');
         setCallState('error');
       };
@@ -693,6 +771,20 @@ export function useVoiceCall(documentId: string) {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as CallMessage;
+          
+          // Mark call as started when we receive call_started message
+          if (data.type === 'call_started') {
+            callStarted = true;
+            console.log('Call started, audio capture enabled');
+            // Start call duration timer
+            callStartTimeRef.current = Date.now();
+            durationIntervalRef.current = setInterval(() => {
+              if (callStartTimeRef.current) {
+                setCallDuration(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
+              }
+            }, 1000);
+          }
+          
           handleMessage(data);
         } catch (e) {
           console.error('Failed to parse message:', e);
@@ -700,39 +792,6 @@ export function useVoiceCall(documentId: string) {
       };
       
       wsRef.current = ws;
-      
-      // Set up AudioWorklet for PCM16 capture
-      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-      
-      // Create worklet from inline code
-      const blob = new Blob([PCM16_WORKLET_CODE], { type: 'application/javascript' });
-      const workletUrl = URL.createObjectURL(blob);
-      await audioContextRef.current.audioWorklet.addModule(workletUrl);
-      URL.revokeObjectURL(workletUrl);
-      
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      const workletNode = new AudioWorkletNode(audioContextRef.current, 'pcm16-processor');
-      
-      workletNode.port.onmessage = (event) => {
-        if (!isMuted && ws.readyState === WebSocket.OPEN && event.data.pcm16) {
-          // Convert ArrayBuffer to base64
-          const bytes = new Uint8Array(event.data.pcm16);
-          let binary = '';
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64 = btoa(binary);
-          
-          ws.send(JSON.stringify({
-            type: 'audio_chunk',
-            data: base64
-          }));
-        }
-      };
-      
-      source.connect(workletNode);
-      workletNode.connect(audioContextRef.current.destination);
-      workletNodeRef.current = workletNode;
       
     } catch (e) {
       console.error('Failed to start call:', e);
@@ -763,6 +822,11 @@ export function useVoiceCall(documentId: string) {
     if (wsRef.current) {
       wsRef.current.close();
     }
+    
+    // Clear audio queue and stop playback
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    gainNodeRef.current = null;
     
     wsRef.current = null;
     audioContextRef.current = null;

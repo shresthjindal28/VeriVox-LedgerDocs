@@ -37,19 +37,23 @@ async def get_document_owner(
         404 if document not found
     """
     try:
-        # Query the document_ownership table
-        result = await supabase.client.table("document_ownership").select(
+        # Query the document_ownership table using admin client (bypasses RLS)
+        # Note: Supabase client is synchronous, so no await needed
+        result = supabase.admin_table("document_ownership").select(
             "user_id"
-        ).eq("document_id", document_id).maybe_single().execute()
+        ).eq("document_id", document_id).execute()
         
-        if not result.data:
+        # Check if result has data
+        if not result.data or len(result.data) == 0:
             # Document not found in ownership table
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Document {document_id} not found in ownership records"
             )
         
-        return {"owner_id": result.data.get("user_id")}
+        # Get the first result (should only be one)
+        owner_data = result.data[0]
+        return {"owner_id": owner_data.get("user_id")}
         
     except HTTPException:
         raise
@@ -81,8 +85,8 @@ async def register_document_ownership(
         {"success": True} if registered
     """
     try:
-        # Upsert the ownership record
-        result = await supabase.client.table("document_ownership").upsert({
+        # Upsert the ownership record using admin client
+        result = supabase.admin_table("document_ownership").upsert({
             "document_id": document_id,
             "user_id": user_id,
         }).execute()
@@ -117,7 +121,7 @@ async def remove_document_ownership(
         {"success": True} if removed
     """
     try:
-        result = await supabase.client.table("document_ownership").delete().eq(
+        result = supabase.admin_table("document_ownership").delete().eq(
             "document_id", document_id
         ).execute()
         
@@ -149,7 +153,7 @@ async def get_user_documents(
         {"documents": [{"document_id": "...", "created_at": "..."}]}
     """
     try:
-        result = await supabase.client.table("document_ownership").select(
+        result = supabase.admin_table("document_ownership").select(
             "document_id, created_at"
         ).eq("user_id", user_id).order("created_at", desc=True).execute()
         

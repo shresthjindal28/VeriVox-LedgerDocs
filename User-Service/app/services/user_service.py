@@ -214,9 +214,10 @@ class UserService:
             Preferences or None
         """
         try:
-            result = supabase.admin_table("study_preferences").select("*").eq("user_id", user_id).single().execute()
+            # Use maybe_single() or check without single() to avoid 406 error when no rows exist
+            result = supabase.admin_table("study_preferences").select("*").eq("user_id", user_id).execute()
             
-            if not result.data:
+            if not result.data or len(result.data) == 0:
                 # Return defaults if not found
                 return StudyPreferencesResponse(
                     user_id=user_id,
@@ -229,15 +230,18 @@ class UserService:
                     updated_at=datetime.utcnow()
                 )
             
+            # Get the first (and should be only) row
+            pref_data = result.data[0]
+            
             return StudyPreferencesResponse(
-                user_id=result.data["user_id"],
-                voice=result.data.get("voice", "nova"),
-                theme=result.data.get("theme", "system"),
-                language=result.data.get("language", "en"),
-                notifications_enabled=result.data.get("notifications_enabled", True),
-                auto_play_audio=result.data.get("auto_play_audio", False),
-                playback_speed=result.data.get("playback_speed", 1.0),
-                updated_at=result.data.get("updated_at")
+                user_id=pref_data["user_id"],
+                voice=pref_data.get("voice", "nova"),
+                theme=pref_data.get("theme", "system"),
+                language=pref_data.get("language", "en"),
+                notifications_enabled=pref_data.get("notifications_enabled", True),
+                auto_play_audio=pref_data.get("auto_play_audio", False),
+                playback_speed=pref_data.get("playback_speed", 1.0),
+                updated_at=pref_data.get("updated_at")
             )
             
         except Exception as e:

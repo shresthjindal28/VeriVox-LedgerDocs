@@ -606,10 +606,12 @@ async def websocket_voice_call(
     try:
         while True:
             data = await websocket.receive_text()
+            logger.info(f"Received WebSocket message: {data[:100]}", session_id=session_id)
             
             try:
                 message = json.loads(data)
             except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON received: {data[:100]}", session_id=session_id)
                 await websocket.send_json({
                     "type": "error",
                     "message": "Invalid JSON format",
@@ -618,11 +620,13 @@ async def websocket_voice_call(
                 continue
             
             msg_type = message.get("type", "")
+            logger.info(f"Processing message type: {msg_type}", session_id=session_id, msg_type=msg_type)
             
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
             
             elif msg_type == "start_call":
+                logger.info("Processing start_call request", session_id=session_id, user_id=user_id, document_id=document_id)
                 # Initialize the call
                 try:
                     # Create call session with ownership validation
@@ -672,7 +676,16 @@ async def websocket_voice_call(
                         "code": "permission_denied"
                     })
                 except Exception as e:
-                    logger.error(f"Failed to start call: {e}")
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.error(
+                        f"Failed to start call: {e}",
+                        session_id=session_id,
+                        user_id=user_id,
+                        document_id=document_id,
+                        error_type=type(e).__name__,
+                        traceback=error_trace
+                    )
                     
                     # Try fallback to Whisper+TTS
                     if call_session:

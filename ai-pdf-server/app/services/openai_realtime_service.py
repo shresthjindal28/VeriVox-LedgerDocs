@@ -76,25 +76,30 @@ class VoiceCallSession:
             self.conversation_history = self.conversation_history[-20:]
 
 
-# PDF-Only System Prompt with strict enforcement
-PDF_ONLY_SYSTEM_PROMPT = """You are a document-bound AI assistant having a voice conversation with a user about their uploaded document.
+# PDF-Only System Prompt with balanced enforcement
+PDF_ONLY_SYSTEM_PROMPT = """You are a helpful AI assistant having a voice conversation with a user about their uploaded document.
 
-CRITICAL RULES - YOU MUST FOLLOW THESE:
-1. You can ONLY answer questions using information from the document context provided.
-2. If information is NOT in the document, you must say: "I cannot find information about that in the uploaded document."
-3. NEVER use external knowledge or make up information.
-4. Always cite which part of the document your answer comes from when possible.
-5. If you're unsure, say so clearly.
+YOUR PRIMARY ROLE:
+- Answer questions using information from the document context provided below
+- Be helpful, friendly, and conversational
+- When information is in the document, provide clear and accurate answers
+- If information is NOT in the document, you can still help by:
+  * Explaining what you found in the document
+  * Suggesting what related information might be available
+  * Being honest that specific details aren't in the document
 
 Document Context:
 {document_context}
 
-Conversation Style:
-- Speak naturally as if in a phone call
-- Keep responses concise (2-3 sentences) unless asked for more detail
-- Be warm and professional
-- When answering, briefly mention where in the document you found the information
-- If the user asks about something not in the document, politely redirect them to ask about the document content
+IMPORTANT GUIDELINES:
+1. Use the document context as your primary source of information
+2. When answering from the document, be specific and cite relevant sections when helpful
+3. If asked about something not in the document, acknowledge it but try to be helpful with what IS available
+4. Speak naturally and conversationally - this is a voice call, not a formal document
+5. Keep responses concise (2-4 sentences) unless asked for more detail
+6. Be warm, professional, and engaging
+
+Remember: The user uploaded this document to discuss it with you. Help them understand and explore the content!
 """
 
 
@@ -164,12 +169,25 @@ class OpenAIRealtimeService:
             
             logger.info(f"Connecting to OpenAI Realtime API for session {session_id}")
             
-            session.openai_ws = await websockets.connect(
-                ws_url,
-                extra_headers=headers,
-                ping_interval=30,
-                ping_timeout=10,
-            )
+            # Use additional_headers for websockets 16+ (extra_headers is deprecated)
+            # Fallback to extra_headers for older versions
+            connect_kwargs = {
+                "ping_interval": 30,
+                "ping_timeout": 10
+            }
+            
+            try:
+                connect_kwargs["additional_headers"] = headers
+                session.openai_ws = await websockets.connect(ws_url, **connect_kwargs)
+            except TypeError as e:
+                # Fallback for older websockets versions
+                if "additional_headers" in str(e) or "unexpected keyword" in str(e):
+                    logger.warning("Websockets library doesn't support additional_headers, trying extra_headers")
+                    connect_kwargs.pop("additional_headers", None)
+                    connect_kwargs["extra_headers"] = headers
+                    session.openai_ws = await websockets.connect(ws_url, **connect_kwargs)
+                else:
+                    raise
             
             # Configure the session
             await self._configure_session(session, on_state_change, on_highlights)
@@ -192,7 +210,15 @@ class OpenAIRealtimeService:
             return session
             
         except Exception as e:
-            logger.error(f"Failed to start call: {e}")
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(
+                f"Failed to start OpenAI Realtime call: {e}",
+                session_id=session_id,
+                document_id=document_id,
+                error_type=type(e).__name__,
+                traceback=error_trace
+            )
             session.state = CallState.ERROR
             on_error(f"Failed to connect: {str(e)}")
             raise
@@ -282,12 +308,24 @@ class OpenAIRealtimeService:
             }
         }
 
+        # Map user preference to supported OpenAI Realtime voices
+        # Supported: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
+        # Map "nova" (not supported) to "alloy" (similar friendly tone)
+        voice_mapping = {
+            "nova": "alloy",  # Friendly, conversational -> Neutral, balanced
+            "alloy": "alloy",
+            "echo": "echo",
+            "shimmer": "shimmer",
+        }
+        # Default to "alloy" if preference not mapped
+        selected_voice = voice_mapping.get("nova", "alloy")
+        
         config = {
             "type": "session.update",
             "session": {
                 "modalities": ["text", "audio"],
                 "instructions": system_prompt,
-                "voice": "nova",  # Options: alloy, echo, fable, onyx, nova, shimmer
+                "voice": selected_voice,  # Use mapped voice (alloy, echo, shimmer, etc.)
                 "input_audio_format": "pcm16",
                 "output_audio_format": "pcm16",
                 "input_audio_transcription": {

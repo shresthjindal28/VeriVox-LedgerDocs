@@ -194,9 +194,10 @@ class AuthMiddleware:
                 audience="authenticated"
             )
             
+            user_meta = payload.get("user_metadata") or {}
             return {
                 "user_id": payload.get("sub", ""),
-                "email": payload.get("email", ""),
+                "email": payload.get("email") or user_meta.get("email", ""),
                 "role": payload.get("role", "student"),
             }
         except jwt.InvalidTokenError:
