@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "document_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d",
+    "filename": "proxy-pdf.pdf",
+    "upload_timestamp": "2026-02-18 05:57:10.310557",
+    "sha256_hash": "17bc6245dc13e4b9bc47ec93322a3a1232345f59cf1cb5a434ca2cc9fb763cba",
+    "page_count": 2,
+    "chunk_count": 5,
+    "file_size_bytes": 463305
+  },
+  "chunks": [
+    {
+      "chunk_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d_p1_c0",
+      "page_number": 1,
+      "text_content": "Shresth Jindal Full Stack Web Developer | Software Engineering Student \ud83d\udcde +91 7461835970 | \u2709\ufe0f shresthjindal28@gmail.com GitHub | LinkedIn | Portfolio PROFESSIONAL SUMMARY Passionate and results-driven full-stack web developer with expertise in building scalable, responsive web applications. Adept at problem-solving, collaborating with cross-functional teams, and delivering innovative solutions through academic projects and hackathons.",
+      "start_index": 0,
+      "end_index": 438
+    },
+    {
+      "chunk_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d_p1_c1",
+      "page_number": 1,
+      "text_content": "lutions through academic projects and hackathons. TECHNICAL SKILLS \uf0b7 Programming: Java, C++, C \uf0b7 Frontend: React.js, HTML5, CSS3, JavaScript, Tailwind CSS \uf0b7 Backend: Node.js, Express.js, RESTful APIs \uf0b7 Database: MongoDB \uf0b7 Tools & Libraries: GSAP, Three.js, Framer Motion, Email.js EDUCATION B.Tech in Computer Science & Engineering Acharya Institute of Technology, Bangalore, India CGPA: 7.7/10 | Expected Graduation: 2027 PROJECTS Employee Management System \uf0b7 Developed a full-stack web application",
+      "start_index": 388,
+      "end_index": 888
+    },
+    {
+      "chunk_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d_p1_c2",
+      "page_number": 1,
+      "text_content": "t System \uf0b7 Developed a full-stack web application to manage employee tasks and admin roles using role-based access control using React.js & Tailwind CSS. \uf0b7 GitHub Repository Weather Forecast Web Application \uf0b7 Created a real-time weather tracking platform with an intuitive user interface. \uf0b7 Integrated multiple weather APIs for accurate global weather data. \uf0b7 GitHub Repository",
+      "start_index": 838,
+      "end_index": 1338
+    },
+    {
+      "chunk_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d_p2_c3",
+      "page_number": 2,
+      "text_content": "Uber Clone \uf0b7 Developed a ride-hailing platform with real-time booking, driver tracking & fare estimation. \uf0b7 Utilized modern web technologies for a seamless user experience. \uf0b7 GitHub Repository ACHIEVEMENTS & CONTRIBUTIONS \uf0b7 Hackathon Success: Top finalist at Inovathon, leading a team in developing innovative solutions. \uf0b7 Open Source Contributions: Actively contributing to GitHub by resolving issues & enhancing documentation.",
+      "start_index": 0,
+      "end_index": 429
+    },
+    {
+      "chunk_id": "65e3d3cd-a7e6-4a58-b71f-4cb27596055d_p2_c4",
+      "page_number": 2,
+      "text_content": "ub by resolving issues & enhancing documentation. CORE COMPETENCIES \u2714 Agile Development \u2714 Problem-Solving \u2714 Team Collaboration \u2714 Continuous Learning \u2714 Cross-Functional Communication LANGUAGES \uf0b7 English: Professional Working Proficiency",
+      "start_index": 379,
+      "end_index": 879
+    }
+  ]
+}
