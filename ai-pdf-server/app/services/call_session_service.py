@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Any
 import httpx
 
 from app.core.config import settings
+from app.core.supabase import supabase
 from app.services.vector_service import vector_store
 from app.utils.helpers import get_logger
 
@@ -236,6 +237,9 @@ class CallSessionManager:
             self.user_sessions[user_id] = []
         self.user_sessions[user_id].append(session_id)
         
+        # Persist to database
+        await self._persist_session_create(session)
+        
         logger.info(
             "Created call session",
             session_id=session_id,
@@ -316,6 +320,7 @@ class CallSessionManager:
         if session:
             session.state = CallSessionState.ACTIVE
             session.update_activity()
+            await self._persist_session_update(session)
             logger.info(f"Session {session_id} is now active")
     
     async def end_session(self, session_id: str) -> Optional[CallSession]:
@@ -334,6 +339,13 @@ class CallSessionManager:
         
         session.state = CallSessionState.ENDED
         
+        # Calculate duration
+        duration_seconds = int(session.get_session_duration_seconds())
+        ended_at = datetime.now()
+        
+        # Persist session end to database
+        await self._persist_session_end(session, ended_at, duration_seconds)
+        
         # Remove from user tracking
         if session.user_id in self.user_sessions:
             self.user_sessions[session.user_id] = [
@@ -347,7 +359,7 @@ class CallSessionManager:
             "Ended call session",
             session_id=session_id,
             user_id=session.user_id,
-            duration_seconds=session.get_session_duration_seconds(),
+            duration_seconds=duration_seconds,
             questions_asked=session.question_count
         )
         
@@ -439,6 +451,59 @@ class CallSessionManager:
             return False
         
         return True
+    
+    async def _persist_session_create(self, session: CallSession) -> None:
+        """Persist session creation to database."""
+        if not supabase.is_available():
+            return
+        
+        try:
+            supabase.client.table("voice_sessions").insert({
+                "session_id": session.session_id,
+                "user_id": session.user_id,
+                "document_id": session.document_id,
+                "state": session.state.value,
+                "created_at": session.created_at.isoformat(),
+                "question_count": session.question_count,
+                "transcript_status": "pending",
+                "verification_status": "pending",
+                "metadata": {}
+            }).execute()
+        except Exception as e:
+            logger.warning(f"Failed to persist session creation: {e}")
+    
+    async def _persist_session_update(self, session: CallSession) -> None:
+        """Persist session state update to database."""
+        if not supabase.is_available():
+            return
+        
+        try:
+            supabase.client.table("voice_sessions").update({
+                "state": session.state.value,
+                "question_count": session.question_count,
+            }).eq("session_id", session.session_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to persist session update: {e}")
+    
+    async def _persist_session_end(
+        self,
+        session: CallSession,
+        ended_at: datetime,
+        duration_seconds: int
+    ) -> None:
+        """Persist session end to database."""
+        if not supabase.is_available():
+            return
+        
+        try:
+            supabase.client.table("voice_sessions").update({
+                "state": session.state.value,
+                "ended_at": ended_at.isoformat(),
+                "duration_seconds": duration_seconds,
+                "question_count": session.question_count,
+            }).eq("session_id", session.session_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to persist session end: {e}")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get session manager statistics."""

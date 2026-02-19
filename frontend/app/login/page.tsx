@@ -35,7 +35,7 @@ export default function LoginPage() {
 
   React.useEffect(() => {
     if (isAuthenticated) {
-      router.push('/documents');
+      router.push('/dashboard');
     }
   }, [isAuthenticated, router]);
 

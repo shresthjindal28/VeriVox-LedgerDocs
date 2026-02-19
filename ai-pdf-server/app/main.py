@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import chat, upload, voice, websocket, extraction, verification
+from app.api.routes import chat, upload, voice, websocket, extraction, verification, dashboard
 from app.core.config import settings
 from app.models.schemas import ErrorResponse, HealthCheckResponse
 from app.services.vector_service import vector_store
@@ -145,6 +145,7 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
 app.include_router(extraction.router, prefix="/api")
 app.include_router(verification.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 app.include_router(websocket.router)
 
 

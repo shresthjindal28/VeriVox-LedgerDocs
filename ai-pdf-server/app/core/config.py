@@ -77,6 +77,10 @@ class Settings:
         self.ENABLE_MERKLE_BATCHING: bool = os.getenv("ENABLE_MERKLE_BATCHING", "true").lower() == "true"
         self.MERKLE_BATCH_SIZE: int = int(os.getenv("MERKLE_BATCH_SIZE", "10"))
 
+        # Supabase settings (for persistence)
+        self.SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+        self.SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+
         # Storage paths
         self.UPLOAD_DIR: Path = UPLOAD_DIR
         self.INDEX_DIR: Path = INDEX_DIR

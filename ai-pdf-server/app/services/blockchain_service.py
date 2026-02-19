@@ -12,6 +12,7 @@ import queue
 import threading
 
 from app.core.config import settings
+from app.core.supabase import supabase
 from app.utils.helpers import get_logger
 
 logger = get_logger(__name__)
@@ -385,6 +386,9 @@ class BlockchainService:
         # Store locally
         self._proofs[f"{ProofType.DOCUMENT.value}:{document_id}"] = proof
         
+        # Persist to database
+        await self._persist_proof(proof)
+        
         # Queue for blockchain submission
         if self.enabled:
             self._queue_proof(proof)
@@ -426,6 +430,9 @@ class BlockchainService:
         
         self._proofs[f"{ProofType.SESSION.value}:{session_id}"] = proof
         
+        # Persist to database
+        await self._persist_proof(proof)
+        
         if self.enabled:
             self._queue_proof(proof)
         
@@ -458,6 +465,9 @@ class BlockchainService:
         )
         
         self._proofs[f"{ProofType.TRANSCRIPT.value}:{session_id}"] = proof
+        
+        # Persist to database
+        await self._persist_proof(proof)
         
         if self.enabled:
             self._queue_proof(proof)
@@ -492,6 +502,9 @@ class BlockchainService:
         
         key = f"{ProofType.EXTRACTION.value}:{document_id}:{proof.timestamp}"
         self._proofs[key] = proof
+        
+        # Persist to database
+        await self._persist_proof(proof)
         
         if self.enabled:
             self._queue_proof(proof)
@@ -692,6 +705,28 @@ class BlockchainService:
             
         except Exception as e:
             logger.error(f"Blockchain submission failed: {e}")
+    
+    async def _persist_proof(self, proof: BlockchainProof) -> None:
+        """Persist proof to database."""
+        if not supabase.is_available():
+            return
+        
+        try:
+            proof_dict = proof.to_dict()
+            supabase.client.table("blockchain_proofs").insert({
+                "proof_type": proof_dict["proof_type"],
+                "hash_value": proof_dict["hash_value"],
+                "document_id": proof_dict.get("document_id"),
+                "session_id": proof_dict.get("session_id"),
+                "user_id": proof_dict.get("user_id"),
+                "tx_hash": proof_dict.get("tx_hash"),
+                "block_number": proof_dict.get("block_number"),
+                "verified": proof_dict.get("verified", False),
+                "timestamp": proof_dict.get("timestamp"),
+                "metadata": proof_dict.get("metadata", {}),
+            }).execute()
+        except Exception as e:
+            logger.warning(f"Failed to persist proof: {e}")
     
     async def _verify_on_chain(self, proof: BlockchainProof) -> bool:
         """

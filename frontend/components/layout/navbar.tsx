@@ -26,12 +26,6 @@ interface NavbarProps {
 export function Navbar({ className }: NavbarProps) {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-
-  // Hide global navbar on landing page and auth pages which have their own specific navbars
-  if (pathname === '/' || pathname === '/login' || pathname === '/register') {
-    return null;
-  }
-
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isDark, setIsDark] = React.useState(false);
@@ -39,6 +33,21 @@ export function Navbar({ className }: NavbarProps) {
   React.useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'));
   }, []);
+
+  // Hide global navbar on landing page, auth pages, and app pages (which use Sidebar)
+  if (
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/documents') ||
+    pathname.startsWith('/library') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/proofs')
+  ) {
+    return null;
+  }
 
   const toggleTheme = () => {
     setIsDark(!isDark);

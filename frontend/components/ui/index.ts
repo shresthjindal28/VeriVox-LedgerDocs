@@ -5,3 +5,4 @@ export { Modal, ConfirmModal } from './modal';
 export { FileUpload } from './file-upload';
 export { Spinner, LoadingOverlay, Skeleton, CardSkeleton, DocumentCardSkeleton, ChatMessageSkeleton } from './loading';
 export { Toaster } from './sonner';
+export { Badge } from './badge';

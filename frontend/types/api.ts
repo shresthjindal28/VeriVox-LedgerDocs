@@ -18,7 +18,8 @@ export interface User {
   id: string;
   email?: string;
   phone?: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: "student" | "teacher" | "admin";
+  display_name?: string;
   email_confirmed_at?: string;
   phone_confirmed_at?: string;
   created_at?: string;
@@ -38,7 +39,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   display_name?: string;
-  role?: 'student' | 'teacher';
+  role?: "student" | "teacher";
 }
 
 export interface LoginRequest {
@@ -64,7 +65,7 @@ export interface Profile {
   display_name?: string;
   avatar_url?: string;
   bio?: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: "student" | "teacher" | "admin";
   created_at: string;
   updated_at: string;
 }
@@ -77,9 +78,9 @@ export interface ProfileUpdate {
 
 export interface StudyPreferences {
   user_id: string;
-  voice?: 'nova' | 'alloy' | 'echo' | 'fable' | 'onyx' | 'shimmer';
+  voice?: "nova" | "alloy" | "echo" | "fable" | "onyx" | "shimmer";
   preferred_voice?: string;
-  theme?: 'light' | 'dark' | 'system';
+  theme?: "light" | "dark" | "system";
   language?: string;
   notifications_enabled?: boolean;
   auto_play_audio?: boolean;
@@ -109,7 +110,7 @@ export interface DocumentInfo {
   upload_timestamp?: string;
   upload_date?: string;
   file_size?: number;
-  status?: 'processing' | 'ready' | 'error';
+  status?: "processing" | "ready" | "error";
 }
 
 export interface DocumentUploadResponse {
@@ -145,7 +146,7 @@ export interface SourceReference {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   sources?: SourceReference[];
@@ -162,7 +163,7 @@ export interface ChatResponse {
 }
 
 export interface StreamingMessage {
-  type: 'token' | 'complete' | 'error' | 'status';
+  type: "token" | "complete" | "error" | "status";
   content?: string;
   response?: ChatResponse;
   message?: string;
@@ -204,12 +205,22 @@ export interface WSChatMessage {
 }
 
 export interface WSVoiceMessage {
-  type: 'audio_chunk' | 'end_speech' | 'interrupt' | 'ping';
+  type: "audio_chunk" | "end_speech" | "interrupt" | "ping";
   data?: string; // base64 audio
 }
 
 export interface WSServerMessage {
-  type: 'state_change' | 'transcription' | 'text_response' | 'audio_chunk' | 'audio_end' | 'error' | 'pong' | 'token' | 'complete' | 'status';
+  type:
+    | "state_change"
+    | "transcription"
+    | "text_response"
+    | "audio_chunk"
+    | "audio_end"
+    | "error"
+    | "pong"
+    | "token"
+    | "complete"
+    | "status";
   state?: string;
   text?: string;
   data?: string;
@@ -218,14 +229,14 @@ export interface WSServerMessage {
   message?: string;
 }
 
-export type ConversationState = 
-  | 'idle' 
-  | 'listening' 
-  | 'user_speaking' 
-  | 'processing' 
-  | 'speaking' 
-  | 'ai_speaking' 
-  | 'interrupted';
+export type ConversationState =
+  | "idle"
+  | "listening"
+  | "user_speaking"
+  | "processing"
+  | "speaking"
+  | "ai_speaking"
+  | "interrupted";
 
 // ============================================================================
 // Health Types
@@ -239,4 +250,75 @@ export interface HealthResponse {
     pdf_service: { status: string };
     user_service: { status: string };
   };
+}
+
+// ============================================================================
+// Dashboard Types
+// ============================================================================
+
+export interface DashboardStats {
+  total_documents: number;
+  active_sessions: number;
+  total_extractions: number;
+  total_proofs: number;
+}
+
+export interface DashboardDocument {
+  id: string;
+  name: string;
+  upload_date: string;
+  pages: number;
+  blockchain_status: 'verified' | 'pending' | 'failed';
+  blockchain_hash?: string;
+}
+
+export interface DashboardDocumentsResponse {
+  documents: DashboardDocument[];
+  pagination: { page: number; limit: number; total: number };
+}
+
+export interface VoiceSession {
+  session_id: string;
+  document_id: string;
+  document_name?: string;
+  state: string;
+  created_at: string;
+  ended_at?: string;
+  duration_seconds: number;
+  question_count: number;
+  transcript_status: "pending" | "completed";
+  verification_status: "pending" | "verified" | "failed";
+}
+
+export interface RecentSessionsResponse {
+  sessions: VoiceSession[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BlockchainProof {
+  proof_id: string;
+  proof_type:
+    | "document"
+    | "session"
+    | "transcript"
+    | "extraction"
+    | "highlight"
+    | "retrieval";
+  hash_value: string;
+  document_id?: string;
+  session_id?: string;
+  tx_hash?: string;
+  block_number?: number;
+  verified: boolean;
+  timestamp: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface BlockchainProofsResponse {
+  proofs: BlockchainProof[];
+  total: number;
+  limit: number;
+  offset: number;
 }

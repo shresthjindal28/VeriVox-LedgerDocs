@@ -23,7 +23,7 @@ export function useVoices() {
     queryKey: voiceKeys.voices(),
     queryFn: async () => {
       const data = await voiceApi.getVoices();
-      setAvailableVoices(data);
+      setAvailableVoices(data.voices);
       return data;
     },
     staleTime: 60 * 60 * 1000, // 1 hour
