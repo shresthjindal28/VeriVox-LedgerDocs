@@ -268,8 +268,10 @@ export interface DashboardDocument {
   name: string;
   upload_date: string;
   pages: number;
-  blockchain_status: 'verified' | 'pending' | 'failed';
+  blockchain_status: "verified" | "pending" | "failed" | "anchored";
   blockchain_hash?: string;
+  tx_hash?: string;
+  chain_id?: number;
 }
 
 export interface DashboardDocumentsResponse {
@@ -286,6 +288,7 @@ export interface VoiceSession {
   ended_at?: string;
   duration_seconds: number;
   question_count: number;
+  first_question?: string;
   transcript_status: "pending" | "completed";
   verification_status: "pending" | "verified" | "failed";
 }
@@ -311,6 +314,7 @@ export interface BlockchainProof {
   session_id?: string;
   tx_hash?: string;
   block_number?: number;
+  chain_id?: number;
   verified: boolean;
   timestamp: string;
   metadata: Record<string, unknown>;
@@ -318,6 +322,23 @@ export interface BlockchainProof {
 
 export interface BlockchainProofsResponse {
   proofs: BlockchainProof[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface RAGExtraction {
+  id: string;
+  document_id: string;
+  document_name: string;
+  query: string;
+  item_count: number;
+  pages_scanned: number;
+  created_at: string;
+}
+
+export interface RecentExtractionsResponse {
+  extractions: RAGExtraction[];
   total: number;
   limit: number;
   offset: number;

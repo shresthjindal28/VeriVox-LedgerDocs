@@ -1,15 +1,114 @@
 'use client';
 
+import * as React from 'react';
 import { Skeleton } from '@/components/ui';
-import { formatPartialHash } from '@/lib/utils';
-import { ShieldCheck, ShieldAlert, Clock, ArrowRight } from 'lucide-react';
-import type { BlockchainProof } from '@/types';
+import { formatPartialHash, formatDate } from '@/lib/utils';
+import { getChainName, getExplorerUrl } from '@/lib/blockchain';
+import { ShieldCheck, Clock, ArrowRight, ExternalLink, Copy, Check } from 'lucide-react';
+import type { BlockchainProof, DashboardDocument } from '@/types';
 import Link from 'next/link';
 
 interface BlockchainProofCardProps {
   proofs?: BlockchainProof[];
+  anchoredDocuments?: DashboardDocument[];
   isLoading?: boolean;
   error?: Error | null;
+}
+
+/** Derive proof-like entries from anchored documents when proofs list is empty */
+function documentsToProofs(docs: DashboardDocument[]): BlockchainProof[] {
+  return docs
+    .filter((d) => (d.blockchain_status === 'anchored' || d.blockchain_status === 'verified') && d.blockchain_hash)
+    .map((d, i) => ({
+      proof_id: `doc-${d.id}-${i}`,
+      proof_type: 'document' as const,
+      hash_value: d.blockchain_hash!,
+      document_id: d.id,
+      tx_hash: d.tx_hash,
+      chain_id: d.chain_id,
+      verified: d.blockchain_status === 'verified',
+      timestamp: d.upload_date,
+      metadata: { name: d.name },
+    }));
+}
+
+function CopyHashButton({ hash }: { hash: string }) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(hash);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="p-0.5 rounded hover:bg-white/10 text-brand-100/50 hover:text-brand-400 transition-colors"
+      title="Copy hash"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
+}
+
+function ProofRow({ proof }: { proof: BlockchainProof }) {
+  const explorerUrl = getExplorerUrl(proof.tx_hash, proof.chain_id);
+  const chainName = getChainName(proof.chain_id);
+
+  return (
+    <div className="py-3 border-b border-brand-500/10 last:border-0 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm text-white capitalize">
+              {proof.proof_type.replace('_', ' ')}
+            </span>
+            <ProofStatusBadge verified={proof.verified} />
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-brand-100/60 font-mono">
+            <span title={proof.hash_value}>{formatPartialHash(proof.hash_value)}</span>
+            <CopyHashButton hash={proof.hash_value} />
+          </div>
+          {proof.tx_hash && (
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-brand-100/50">
+              <span>tx {formatPartialHash(proof.tx_hash)}</span>
+              {explorerUrl && (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-brand-500 hover:text-brand-400 transition-colors"
+                >
+                  View <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          )}
+          {(chainName !== 'Unknown' || proof.block_number) && (
+            <div className="flex items-center gap-3 mt-1 text-[10px] text-brand-100/40">
+              {chainName !== 'Unknown' && <span>{chainName}</span>}
+              {proof.block_number != null && (
+                <span>Block #{proof.block_number}</span>
+              )}
+            </div>
+          )}
+          {proof.timestamp && (
+            <p className="text-[10px] text-brand-100/40 mt-1">
+              {formatDate(proof.timestamp)}
+            </p>
+          )}
+        </div>
+        {proof.document_id && (
+          <Link
+            href={`/documents/${proof.document_id}`}
+            className="text-[10px] text-brand-500 hover:text-brand-400 whitespace-nowrap"
+          >
+            View doc →
+          </Link>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ProofStatusBadge({ verified }: { verified: boolean }) {
@@ -31,9 +130,11 @@ function ProofStatusBadge({ verified }: { verified: boolean }) {
 
 export function BlockchainProofCard({
   proofs = [],
+  anchoredDocuments = [],
   isLoading,
   error,
 }: BlockchainProofCardProps) {
+  const displayProofs = proofs.length > 0 ? proofs : documentsToProofs(anchoredDocuments);
   if (isLoading) {
     return (
       <Skeleton className="h-48 w-full bg-white/5 rounded-2xl border border-brand-500/10" />
@@ -64,30 +165,14 @@ export function BlockchainProofCard({
           </Link>
         </div>
 
-        {proofs.length > 0 ? (
+        {displayProofs.length > 0 ? (
           <div className="space-y-3">
-            {proofs.slice(0, 5).map((proof) => (
-              <div
-                key={proof.proof_id}
-                className="flex items-center justify-between py-2 border-b border-brand-500/10 last:border-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-xs text-brand-100/80 capitalize">
-                    {proof.proof_type}
-                  </div>
-                  <div className="text-xs text-brand-100/50 font-mono mt-0.5">
-                    {formatPartialHash(proof.hash_value)}
-                    {proof.tx_hash && (
-                      <span className="ml-2">tx {formatPartialHash(proof.tx_hash)}</span>
-                    )}
-                  </div>
-                </div>
-                <ProofStatusBadge verified={proof.verified} />
-              </div>
+            {displayProofs.slice(0, 5).map((proof) => (
+              <ProofRow key={proof.proof_id} proof={proof} />
             ))}
-            {proofs.length > 5 && (
+            {displayProofs.length > 5 && (
               <p className="text-xs text-brand-100/40 pt-1">
-                +{proofs.length - 5} more
+                +{displayProofs.length - 5} more
               </p>
             )}
           </div>

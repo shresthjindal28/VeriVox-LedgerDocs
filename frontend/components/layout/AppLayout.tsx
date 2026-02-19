@@ -9,10 +9,11 @@ import { LoadingOverlay } from '@/components/ui';
 
 interface AppLayoutProps {
     children: React.ReactNode;
-    className?: string; // Allow passing className to wrapper for flexibility
+    className?: string; // Applied to the main content area
+    layoutMode?: 'default' | 'fullscreen';
 }
 
-export function AppLayout({ children, className }: AppLayoutProps) {
+export function AppLayout({ children, className, layoutMode = 'default' }: AppLayoutProps) {
     const { isAuthenticated, isInitialized } = useAuthStore();
     const router = useRouter();
     const [isSidebarCollapsed, setSidebarCollapsed] = React.useState(false);
@@ -32,15 +33,19 @@ export function AppLayout({ children, className }: AppLayoutProps) {
     }
 
     return (
-        <div className="flex min-h-screen bg-black">
+        <div className={cn(
+            "flex bg-black",
+            layoutMode === 'fullscreen' ? "h-screen overflow-hidden" : "min-h-screen"
+        )}>
             <Sidebar
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!isSidebarCollapsed)}
             />
             <main
                 className={cn(
-                    "flex-1 min-h-screen transition-all duration-300 relative bg-black overflow-x-hidden",
+                    "flex-1 transition-all duration-300 relative bg-black",
                     isSidebarCollapsed ? "ml-20" : "ml-64",
+                    layoutMode === 'fullscreen' ? "h-full overflow-hidden" : "min-h-screen overflow-x-hidden",
                     className
                 )}
             >

@@ -35,7 +35,7 @@ export function StatsCards({ stats, isLoading, error }: StatsCardsProps) {
 
   const cards = [
     { title: 'Total Documents', value: total_documents, icon: Layers, sub: 'Uploaded' },
-    { title: 'Active Voice Sessions', value: active_sessions, icon: Activity, sub: 'Sessions' },
+    { title: 'Total Voice Sessions', value: active_sessions, icon: Activity, sub: 'Sessions' },
     { title: 'Total Extractions', value: total_extractions, icon: Box, sub: 'RAG extractions' },
     { title: 'Blockchain Proofs', value: total_proofs, icon: Shield, sub: 'Anchored' },
   ];
@@ -45,14 +45,14 @@ export function StatsCards({ stats, isLoading, error }: StatsCardsProps) {
       {cards.map(({ title, value, icon: Icon, sub }) => (
         <div
           key={title}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0c1a12] to-[#050a07] border border-brand-500/10 hover:border-brand-500/20 transition-all group"
+          className="relative overflow-hidden rounded-2xl bg-linear-to-br from-[#0c1a12] to-[#050a07] border border-brand-500/10 hover:border-brand-500/20 transition-all group"
         >
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Icon className="w-24 h-24 text-brand-500" />
           </div>
           <div className="p-6 relative z-10">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-brand-500/20 to-transparent border border-brand-500/20">
+              <div className="p-3 rounded-xl bg-linear-to-br from-brand-500/20 to-transparent border border-brand-500/20">
                 <Icon className="w-8 h-8 text-brand-400" />
               </div>
               <div>

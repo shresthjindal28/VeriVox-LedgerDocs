@@ -18,11 +18,18 @@ async def get_auth_headers(request: Request) -> dict:
 
 @router.post("/{document_id}", summary="Ask question")
 async def ask_question(request: Request, document_id: str, auth_headers: dict = Depends(get_auth_headers)) -> Response:
-    """Ask a question about a document."""
-    # PDF service expects /api/chat with document_id in body
+    """Ask a question about a document. Injects document_id into body for PDF service."""
+    import json
+    body = await request.body()
+    try:
+        data = json.loads(body) if body else {}
+    except json.JSONDecodeError:
+        data = {}
+    data["document_id"] = document_id
     return await proxy_service.proxy_request(
         request, "pdf", "/api/chat",
-        extra_headers=auth_headers
+        extra_headers=auth_headers,
+        body=json.dumps(data).encode("utf-8"),
     )
 
 

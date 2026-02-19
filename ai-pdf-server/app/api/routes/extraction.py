@@ -1,7 +1,7 @@
 """API routes for exhaustive extraction and highlighting."""
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services.rag_service import (
@@ -10,6 +10,7 @@ from app.services.rag_service import (
     rag_service,
 )
 from app.services.highlight_service import highlight_service, HighlightSet
+from app.services.dashboard_service import dashboard_service
 from app.utils.helpers import get_logger
 
 logger = get_logger(__name__)
@@ -48,7 +49,7 @@ class HighlightResponse(BaseModel):
 
 
 @router.post("/extract", response_model=ExtractionResponse)
-async def extract_from_document(request: ExtractionRequest):
+async def extract_from_document(request: ExtractionRequest, raw_request: Request):
     """
     Perform exhaustive extraction from a document.
     
@@ -61,6 +62,17 @@ async def extract_from_document(request: ExtractionRequest):
             query=request.query,
             document_id=request.document_id,
         )
+        
+        # Record for dashboard (Total Extractions + Recent Extractions)
+        user_id = raw_request.headers.get("x-user-id") or raw_request.headers.get("X-User-ID")
+        if user_id:
+            await dashboard_service.record_extraction(
+                user_id=user_id.strip(),
+                document_id=request.document_id,
+                query=request.query,
+                item_count=extraction_result.total_count,
+                pages_scanned=extraction_result.pages_scanned,
+            )
         
         # Generate highlights if requested
         highlights = None

@@ -45,17 +45,17 @@ class WebSocketProxy:
             try:
                 while True:
                     data = await client_ws.receive_text()
-                    # Log start_call messages for debugging
+                    # Log start_call and end_call messages for debugging
                     try:
                         import json
                         msg = json.loads(data)
                         msg_type = msg.get("type")
-                        if msg_type == "start_call":
-                            logger.info("Forwarding start_call message to backend", message_preview=data[:100])
+                        if msg_type in ("start_call", "end_call"):
+                            logger.info(f"Forwarding {msg_type} message to backend")
                         else:
-                            logger.debug(f"Forwarding message type: {msg_type}", message_preview=data[:100])
-                    except Exception as e:
-                        logger.debug(f"Non-JSON message or parse error: {e}", message_preview=data[:100])
+                            logger.debug(f"Forwarding message type: {msg_type}")
+                    except Exception:
+                        pass
                     await backend_ws.send(data)
             except WebSocketDisconnect:
                 logger.info("Client disconnected")
@@ -71,12 +71,32 @@ class WebSocketProxy:
             except Exception as e:
                 logger.error(f"Error forwarding to client: {e}")
         
-        # Run both directions concurrently
-        await asyncio.gather(
-            forward_to_backend(),
-            forward_to_client(),
-            return_exceptions=True
-        )
+        # Run both directions concurrently; when EITHER completes,
+        # cancel the other and close the backend WebSocket
+        task_to_backend = asyncio.create_task(forward_to_backend())
+        task_to_client = asyncio.create_task(forward_to_client())
+
+        try:
+            done, pending = await asyncio.wait(
+                [task_to_backend, task_to_client],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            # Cancel the still-running direction
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        except Exception as e:
+            logger.error(f"Error in proxy_messages: {e}")
+        finally:
+            # Always close the backend WebSocket when the proxy is done
+            try:
+                await backend_ws.close()
+                logger.info("Backend WebSocket closed by proxy")
+            except Exception:
+                pass
     
     @staticmethod
     async def proxy_websocket(

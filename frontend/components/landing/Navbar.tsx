@@ -1,9 +1,13 @@
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores";
 
 export function Navbar() {
+    const { isAuthenticated } = useAuthStore();
+
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/5">
             <div className="container mx-auto px-4 h-20 flex items-center justify-between">
@@ -28,12 +32,24 @@ export function Navbar() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                    <Link href="/login" className="text-sm font-bold text-white hover:text-brand-500 transition-colors hidden sm:block">
-                        Log In
-                    </Link>
-                    <Button variant="default" className="font-bold shadow-lg shadow-brand-500/20 bg-brand-500 text-black hover:bg-brand-400 rounded-lg px-6">
-                        Get Started
-                    </Button>
+                    {isAuthenticated ? (
+                        <Link href="/dashboard">
+                            <Button variant="default" className="font-bold shadow-lg shadow-brand-500/20 bg-brand-500 text-black hover:bg-brand-400 rounded-lg px-6">
+                                Dashboard
+                            </Button>
+                        </Link>
+                    ) : (
+                        <>
+                            <Link href="/login" className="text-sm font-bold text-white hover:text-brand-500 transition-colors hidden sm:block">
+                                Log In
+                            </Link>
+                            <Link href="/register">
+                                <Button variant="default" className="font-bold shadow-lg shadow-brand-500/20 bg-brand-500 text-black hover:bg-brand-400 rounded-lg px-6">
+                                    Get Started
+                                </Button>
+                            </Link>
+                        </>
+                    )}
                 </div>
             </div>
         </nav>

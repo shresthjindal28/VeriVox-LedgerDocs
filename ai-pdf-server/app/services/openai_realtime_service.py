@@ -64,7 +64,10 @@ class VoiceCallSession:
     is_active: bool = True
     user_id: Optional[str] = None
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
-    
+    _response_create_task: Optional[asyncio.Task] = field(default=None, repr=False)
+    _current_response_id: Optional[str] = field(default=None, repr=False)
+    _emitted_ai_speaking: bool = field(default=False, repr=False)
+
     def update_activity(self):
         self.last_activity = datetime.now()
     
@@ -98,6 +101,11 @@ IMPORTANT GUIDELINES:
 4. Speak naturally and conversationally - this is a voice call, not a formal document
 5. Keep responses concise (2-4 sentences) unless asked for more detail
 6. Be warm, professional, and engaging
+
+CRITICAL - TOOL USE (search_document, extract_all):
+- NEVER say "Let me gather...", "One moment", "Let me look that up", "I'm fetching...", or any filler before using a tool.
+- When you need to use search_document or extract_all: call the tool first with NO spoken output. After you receive the tool result, give the complete answer in ONE spoken response.
+- The user must hear ONLY the final answer - never placeholder acknowledgments. If you use a tool, stay silent until you have the result, then speak the full answer.
 
 Remember: The user uploaded this document to discuss it with you. Help them understand and explore the content!
 """
@@ -336,6 +344,7 @@ class OpenAIRealtimeService:
                     "threshold": 0.5,
                     "prefix_padding_ms": 300,
                     "silence_duration_ms": 500,
+                    "interrupt_response": True,  # Stop AI when user speaks (barge-in)
                 },
                 "tools": [rag_tool, extract_tool],
                 "tool_choice": "auto",
@@ -407,6 +416,16 @@ class OpenAIRealtimeService:
             logger.info("Session updated")
             
         elif event_type == "input_audio_buffer.speech_started":
+            # User started speaking - immediately cancel AI response for natural barge-in
+            if session.state == CallState.AI_SPEAKING:
+                try:
+                    await session.openai_ws.send(json.dumps({"type": "response.cancel"}))
+                    logger.debug(f"Interrupted AI for barge-in: {session.session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cancel response on barge-in: {e}")
+            # Invalidate current response to reject any stale audio deltas still in flight
+            session._current_response_id = None
+            session._emitted_ai_speaking = False
             session.state = CallState.USER_SPEAKING
             on_state_change(session.state)
             
@@ -420,29 +439,57 @@ class OpenAIRealtimeService:
             if transcript:
                 on_transcript("user", transcript)
                 
+        elif event_type == "response.created":
+            # Track current response ID to filter stale audio from cancelled responses
+            session._current_response_id = data.get("response", {}).get("id")
+            session._emitted_ai_speaking = False
+            logger.debug(f"Response created: {session._current_response_id}")
+
         elif event_type == "response.audio.delta":
-            # AI audio chunk
-            session.state = CallState.AI_SPEAKING
-            on_state_change(session.state)
-            
+            # Ignore stale audio from cancelled/old responses
+            response_id = data.get("response_id", "")
+            if response_id and session._current_response_id and response_id != session._current_response_id:
+                return
+
+            # Only emit AI_SPEAKING state change once per response to avoid flooding
+            if not session._emitted_ai_speaking:
+                session.state = CallState.AI_SPEAKING
+                on_state_change(session.state)
+                session._emitted_ai_speaking = True
+
             audio_b64 = data.get("delta", "")
             if audio_b64:
                 audio_bytes = base64.b64decode(audio_b64)
                 on_audio(audio_bytes)
                 
         elif event_type == "response.audio_transcript.delta":
-            # AI text transcript delta
+            # AI text transcript delta - ignore if from stale response
+            response_id = data.get("response_id", "")
+            if response_id and session._current_response_id and response_id != session._current_response_id:
+                return
             transcript = data.get("delta", "")
             if transcript:
                 on_transcript("assistant_delta", transcript)
-                
+
         elif event_type == "response.audio_transcript.done":
-            # Complete AI transcript
+            # Complete AI transcript - ignore if from stale response
+            response_id = data.get("response_id", "")
+            if response_id and session._current_response_id and response_id != session._current_response_id:
+                return
             transcript = data.get("transcript", "")
             if transcript:
                 on_transcript("assistant", transcript)
                 
         elif event_type == "response.done":
+            # Ignore done events for cancelled or stale responses
+            response = data.get("response", {})
+            response_id = response.get("id", "")
+            response_status = response.get("status", "")
+            if response_status == "cancelled":
+                logger.debug(f"Response cancelled: {response_id}")
+                return
+            if response_id and session._current_response_id and response_id != session._current_response_id:
+                return
             session.state = CallState.CONNECTED
             on_state_change(session.state)
         
@@ -459,6 +506,28 @@ class OpenAIRealtimeService:
             # Rate limit info - just log
             pass
     
+    def _schedule_response_create(self, session: VoiceCallSession):
+        """
+        Debounce response.create to avoid duplicate responses when the model
+        makes multiple function calls (e.g. search_document + extract_all).
+        Only one response.create is sent per batch of function calls.
+        """
+        async def _send_response_create():
+            await asyncio.sleep(0.08)  # 80ms debounce
+            session._response_create_task = None
+            if session.openai_ws and session.is_active:
+                try:
+                    await session.openai_ws.send(json.dumps({"type": "response.create"}))
+                    logger.debug(f"Scheduled response.create for {session.session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to send response.create: {e}")
+
+        # Cancel any pending task
+        if session._response_create_task and not session._response_create_task.done():
+            session._response_create_task.cancel()
+
+        session._response_create_task = asyncio.create_task(_send_response_create())
+
     async def _handle_function_call(self, session: VoiceCallSession, data: dict):
         """Handle a function call from OpenAI (e.g., document search, extraction)."""
         try:
@@ -488,8 +557,8 @@ class OpenAIRealtimeService:
                     }
                     await session.openai_ws.send(json.dumps(response))
                     
-                    # Trigger a response
-                    await session.openai_ws.send(json.dumps({"type": "response.create"}))
+                    # Debounced: triggers response once per batch of function calls
+                    self._schedule_response_create(session)
                     
                     logger.info(f"Function call handled: search_document with query '{query}'")
             
@@ -499,10 +568,11 @@ class OpenAIRealtimeService:
                 full_query = args.get("full_query", extraction_type)
                 
                 if extraction_type:
-                    # Perform exhaustive extraction
+                    # Perform exhaustive extraction (user_id for dashboard recording)
                     result, highlights = await self._extract_all_from_document(
                         session.document_id,
                         full_query,
+                        user_id=session.user_id,
                     )
                     
                     # Send highlights to frontend if callback exists
@@ -523,8 +593,8 @@ class OpenAIRealtimeService:
                     }
                     await session.openai_ws.send(json.dumps(response))
                     
-                    # Trigger a response
-                    await session.openai_ws.send(json.dumps({"type": "response.create"}))
+                    # Debounced: triggers response once per batch of function calls
+                    self._schedule_response_create(session)
                     
                     logger.info(f"Function call handled: extract_all for '{extraction_type}'")
                     
@@ -568,7 +638,8 @@ class OpenAIRealtimeService:
     async def _extract_all_from_document(
         self, 
         document_id: str, 
-        query: str
+        query: str,
+        user_id: Optional[str] = None,
     ) -> tuple[str, List[Dict]]:
         """
         Perform exhaustive extraction from document.
@@ -580,12 +651,22 @@ class OpenAIRealtimeService:
             # Import here to avoid circular dependency
             from app.services.rag_service import rag_service
             from app.services.highlight_service import highlight_service
+            from app.services.dashboard_service import dashboard_service
             
             # Perform exhaustive extraction
             extraction_result = await rag_service.extract_all_from_document(
                 query=query,
                 document_id=document_id,
             )
+            
+            if user_id:
+                await dashboard_service.record_extraction(
+                    user_id=user_id,
+                    document_id=document_id,
+                    query=query,
+                    item_count=extraction_result.total_count,
+                    pages_scanned=extraction_result.pages_scanned,
+                )
             
             if extraction_result.total_count == 0:
                 return "No matching items found in the document.", []
@@ -668,6 +749,15 @@ class OpenAIRealtimeService:
             return
         
         session.is_active = False
+
+        # Cancel any pending response.create debounce
+        if session._response_create_task and not session._response_create_task.done():
+            session._response_create_task.cancel()
+            try:
+                await session._response_create_task
+            except asyncio.CancelledError:
+                pass
+            session._response_create_task = None
         
         if session.openai_ws:
             try:

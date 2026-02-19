@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { voiceApi } from "@/lib/api";
+import { getAuthToken } from "@/lib/cookies";
 import { useVoiceStore, useCallStore } from "@/stores";
 import { useCallback, useRef, useEffect, useState } from "react";
 
@@ -555,6 +556,9 @@ export function useVoiceCall(documentId: string) {
   const isPlayingRef = useRef<boolean>(false);
   const gainNodeRef = useRef<GainNode | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const flushFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When true, ignore incoming audio_chunk (stale from previous response during interrupt)
+  const rejectAudioRef = useRef(false);
 
   const [callState, setCallState] = useState<CallState>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -571,6 +575,12 @@ export function useVoiceCall(documentId: string) {
 
   // Clear audio queue and stop current playback
   const clearAudioQueue = useCallback(() => {
+    // Cancel flush fallback
+    if (flushFallbackRef.current) {
+      clearTimeout(flushFallbackRef.current);
+      flushFallbackRef.current = null;
+    }
+
     // Stop current playback
     if (currentSourceRef.current) {
       try {
@@ -591,6 +601,7 @@ export function useVoiceCall(documentId: string) {
     if (isPlayingRef.current || audioQueueRef.current.length === 0) {
       return;
     }
+    isPlayingRef.current = true; // Set immediately to prevent duplicate invocation
 
     if (!playbackContextRef.current) {
       playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
@@ -599,7 +610,6 @@ export function useVoiceCall(documentId: string) {
       gainNodeRef.current.gain.value = 1.0;
     }
 
-    isPlayingRef.current = true;
     const context = playbackContextRef.current;
     const gainNode = gainNodeRef.current!;
 
@@ -640,6 +650,9 @@ export function useVoiceCall(documentId: string) {
   }, []);
 
   // Play PCM16 audio (queued)
+  // Buffer ~60ms before starting playback - balance between smoothness and lag
+  const MIN_BUFFER_SAMPLES = 1440; // 60ms at 24kHz
+
   const playPCM16Audio = useCallback(
     async (base64Data: string) => {
       try {
@@ -660,8 +673,28 @@ export function useVoiceCall(documentId: string) {
         // Add to queue
         audioQueueRef.current.push(float32);
 
-        // Process queue
-        processAudioQueue();
+        // Cancel any pending flush fallback (we have new data)
+        if (flushFallbackRef.current) {
+          clearTimeout(flushFallbackRef.current);
+          flushFallbackRef.current = null;
+        }
+
+        // Start playback when we have enough buffered to smooth over network jitter
+        const totalSamples = audioQueueRef.current.reduce(
+          (sum, arr) => sum + arr.length,
+          0,
+        );
+        if (totalSamples >= MIN_BUFFER_SAMPLES && !isPlayingRef.current) {
+          processAudioQueue();
+        } else if (!isPlayingRef.current) {
+          // Fallback: flush after 80ms for short responses (e.g. "Yes", "No")
+          flushFallbackRef.current = setTimeout(() => {
+            flushFallbackRef.current = null;
+            if (audioQueueRef.current.length > 0 && !isPlayingRef.current) {
+              processAudioQueue();
+            }
+          }, 80);
+        }
       } catch (e) {
         console.error("Failed to queue PCM16 audio:", e);
       }
@@ -681,17 +714,39 @@ export function useVoiceCall(documentId: string) {
 
         case "state_change":
           if (data.state === "user_speaking") {
-            // User started speaking - clear any queued AI audio immediately
+            // User started speaking - clear any queued AI audio and reject stale chunks
+            rejectAudioRef.current = true;
             clearAudioQueue();
+            setAiTranscript(""); // Clear so new response doesn't append to old
             setCallState("user_speaking");
           } else if (data.state === "ai_speaking") {
-            setCallState("ai_speaking");
+            // Only accept new audio if coming from a legitimate state transition.
+            // Use functional setState to read the actual current state (not stale closure).
+            // This prevents stale ai_speaking from cancelled responses from
+            // re-opening the audio gate after an interrupt.
+            setCallState((prev) => {
+              if (
+                prev === "processing" ||
+                prev === "connected" ||
+                prev === "connecting"
+              ) {
+                rejectAudioRef.current = false;
+              }
+              return "ai_speaking";
+            });
           } else if (data.state === "processing") {
-            // Processing new response - clear old audio queue
+            rejectAudioRef.current = true; // Reject any in-flight chunks from old response
             clearAudioQueue();
+            setAiTranscript(""); // Clear so we don't show old + new (duplicate)
             setCallState("processing");
           } else if (data.state === "connected") {
-            setCallState("connected");
+            // Response finished normally - use functional form to guard
+            setCallState((prev) => {
+              if (prev === "ai_speaking") {
+                rejectAudioRef.current = false;
+              }
+              return "connected";
+            });
           } else if (data.state === "muted") {
             setIsMuted(true);
           } else if (data.state === "unmuted") {
@@ -710,7 +765,8 @@ export function useVoiceCall(documentId: string) {
           break;
 
         case "audio_chunk":
-          if (data.data) {
+          // Ignore stale chunks from previous response (user interrupted or new question)
+          if (data.data && !rejectAudioRef.current) {
             playPCM16Audio(data.data);
           }
           break;
@@ -767,6 +823,8 @@ export function useVoiceCall(documentId: string) {
     setError(null);
     setTranscription(null);
     setAiTranscript("");
+    callStartTimeRef.current = null;
+    setCallDuration(0);
 
     try {
       // Get microphone access
@@ -783,8 +841,7 @@ export function useVoiceCall(documentId: string) {
       // Set up WebSocket (browsers cannot set headers; pass token in query for gateway auth)
       const token =
         typeof window !== "undefined"
-          ? localStorage.getItem("access_token") ||
-            localStorage.getItem("auth_token")
+          ? getAuthToken() || localStorage.getItem("access_token") || localStorage.getItem("auth_token")
           : null;
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
       const path = `/ws/voice/call/${documentId}`;
@@ -849,11 +906,25 @@ export function useVoiceCall(documentId: string) {
         workletNodeRef.current = workletNode;
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         callStarted = false;
-        if (callState !== "ended") {
-          setCallState("ended");
-        }
+        console.log(
+          "[VoiceCall] ws.onclose fired, code:",
+          ev.code,
+          "reason:",
+          ev.reason,
+        );
+        // Always set to ended when socket closes — use functional update to avoid stale closure
+        setCallState((prev) => {
+          if (prev !== "ended" && prev !== "idle") {
+            console.log(
+              "[VoiceCall] setting callState to ended from onclose, was:",
+              prev,
+            );
+            return "ended";
+          }
+          return prev;
+        });
       };
 
       ws.onerror = () => {
@@ -870,15 +941,6 @@ export function useVoiceCall(documentId: string) {
           if (data.type === "call_started") {
             callStarted = true;
             console.log("Call started, audio capture enabled");
-            // Start call duration timer
-            callStartTimeRef.current = Date.now();
-            durationIntervalRef.current = setInterval(() => {
-              if (callStartTimeRef.current) {
-                setCallDuration(
-                  Math.floor((Date.now() - callStartTimeRef.current) / 1000),
-                );
-              }
-            }, 1000);
           }
 
           handleMessage(data);
@@ -897,38 +959,96 @@ export function useVoiceCall(documentId: string) {
 
   // End call
   const endCall = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "end_call" }));
-    }
+    const ws = wsRef.current;
+    console.log("[VoiceCall] endCall triggered, ws state:", ws?.readyState);
 
-    // Cleanup
+    // Immediately set state so UI updates right away
+    setCallState("ended");
+
+    // Cleanup duration timer
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+
+    // Stop microphone tracks first (stops audio capture immediately)
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    } catch (e) {
+      console.warn("[VoiceCall] Error stopping stream:", e);
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
+
+    // Close audio contexts
+    try {
+      if (
+        audioContextRef.current &&
+        audioContextRef.current.state !== "closed"
+      ) {
+        audioContextRef.current.close();
+      }
+    } catch (e) {
+      console.warn("[VoiceCall] Error closing audioContext:", e);
     }
-    if (playbackContextRef.current) {
-      playbackContextRef.current.close();
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
+
+    try {
+      if (
+        playbackContextRef.current &&
+        playbackContextRef.current.state !== "closed"
+      ) {
+        playbackContextRef.current.close();
+      }
+    } catch (e) {
+      console.warn("[VoiceCall] Error closing playbackContext:", e);
     }
 
     // Clear audio queue and stop playback
     clearAudioQueue();
 
+    // Send end_call message FIRST, then close socket after a short delay
+    // so the message reaches the backend before the connection is torn down
+    try {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "end_call" }));
+        console.log(
+          "[VoiceCall] end_call message sent, closing socket in 150ms",
+        );
+        // Give the message time to be delivered through the gateway proxy
+        setTimeout(() => {
+          try {
+            if (
+              ws.readyState !== WebSocket.CLOSED &&
+              ws.readyState !== WebSocket.CLOSING
+            ) {
+              ws.close(1000, "Call ended by user");
+              console.log("[VoiceCall] ws.close() called after delay");
+            }
+          } catch (e) {
+            console.warn("[VoiceCall] Error closing ws after delay:", e);
+          }
+        }, 150);
+      } else {
+        // WebSocket not open — just close it directly
+        try {
+          if (ws) ws.close();
+        } catch (e) {
+          console.warn("[VoiceCall] Error closing non-open ws:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("[VoiceCall] Error sending end_call:", e);
+    }
+
+    // Null out refs (but ws close happens async via setTimeout above)
     wsRef.current = null;
     audioContextRef.current = null;
     playbackContextRef.current = null;
     streamRef.current = null;
     workletNodeRef.current = null;
 
-    setCallState("ended");
-  }, []);
+    console.log("[VoiceCall] endCall complete, state set to ended");
+  }, [clearAudioQueue]);
 
   // Interrupt AI
   const interrupt = useCallback(() => {
@@ -969,6 +1089,45 @@ export function useVoiceCall(documentId: string) {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Timer effect based on call state
+  useEffect(() => {
+    const isActive = [
+      "connected",
+      "user_speaking",
+      "ai_speaking",
+      "processing",
+    ].includes(callState);
+    let interval: NodeJS.Timeout;
+
+    if (isActive) {
+      if (!callStartTimeRef.current) {
+        callStartTimeRef.current = Date.now();
+      }
+
+      // Update immediately
+      setCallDuration(
+        Math.floor((Date.now() - callStartTimeRef.current) / 1000),
+      );
+
+      interval = setInterval(() => {
+        if (callStartTimeRef.current) {
+          setCallDuration(
+            Math.floor((Date.now() - callStartTimeRef.current) / 1000),
+          );
+        }
+      }, 1000);
+    } else {
+      if (callState === "idle" || callState === "connecting") {
+        callStartTimeRef.current = null;
+        setCallDuration(0);
+      }
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [callState]);
 
   return {
     // State

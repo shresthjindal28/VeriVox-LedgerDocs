@@ -82,7 +82,7 @@ export function RecentCalls({
         <table className="w-full text-left text-sm">
           <thead className="text-xs text-brand-100/40 uppercase bg-white/2">
             <tr>
-              <th className="px-5 py-4 font-medium">Session</th>
+              <th className="px-5 py-4 font-medium">First Question</th>
               <th className="px-5 py-4 font-medium">Document</th>
               <th className="px-5 py-4 font-medium">Duration</th>
               <th className="px-5 py-4 font-medium">Verification</th>
@@ -95,8 +95,14 @@ export function RecentCalls({
                   key={session.session_id}
                   className="hover:bg-brand-500/5 transition-colors"
                 >
-                  <td className="px-5 py-4 font-mono text-brand-100/80 text-xs">
-                    {session.session_id.slice(0, 8)}...
+                  <td className="px-5 py-4 text-brand-100/90 max-w-[200px]" title={session.first_question}>
+                    {session.first_question ? (
+                      <span className="line-clamp-2">{session.first_question}</span>
+                    ) : (
+                      <span className="font-mono text-xs text-brand-100/50">
+                        {session.session_id.slice(0, 8)}...
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-brand-100/80 truncate max-w-[120px]">
                     {session.document_name ?? '—'}

@@ -58,6 +58,20 @@ async def get_recent_sessions(
     return result
 
 
+@router.get("/extractions/recent", summary="Get recent RAG extractions")
+async def get_recent_extractions(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Get recent RAG extraction runs for the authenticated user.
+    Returns: extractions (query, document_name, item_count, pages_scanned, created_at), total, limit, offset.
+    """
+    user_id = await require_user_id(request)
+    return await dashboard_service.get_recent_extractions(user_id, limit=limit, offset=offset)
+
+
 @router.get("/blockchain/proofs", summary="Get blockchain proofs")
 async def get_blockchain_proofs(
     request: Request,

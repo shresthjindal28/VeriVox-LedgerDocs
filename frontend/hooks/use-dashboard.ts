@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/lib/api';
-import type { DashboardStats, RecentSessionsResponse, BlockchainProofsResponse } from '@/types';
+import type { DashboardStats, RecentSessionsResponse, RecentExtractionsResponse, BlockchainProofsResponse } from '@/types';
 
 // Query keys
 export const dashboardKeys = {
@@ -15,6 +15,9 @@ export const dashboardKeys = {
   proofs: () => [...dashboardKeys.all, 'proofs'] as const,
   proofsList: (limit?: number, offset?: number, proofType?: string) => 
     [...dashboardKeys.proofs(), 'list', { limit, offset, proofType }] as const,
+  extractions: () => [...dashboardKeys.all, 'extractions'] as const,
+  extractionsList: (limit?: number, offset?: number) => 
+    [...dashboardKeys.extractions(), 'list', { limit, offset }] as const,
 };
 
 // ============================================================================
@@ -42,6 +45,14 @@ export function useRecentSessions(limit: number = 20, offset: number = 0) {
   return useQuery({
     queryKey: dashboardKeys.sessionsList(limit, offset),
     queryFn: () => dashboardApi.getRecentSessions(limit, offset),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useRecentExtractions(limit: number = 20, offset: number = 0) {
+  return useQuery({
+    queryKey: dashboardKeys.extractionsList(limit, offset),
+    queryFn: () => dashboardApi.getRecentExtractions(limit, offset),
     staleTime: 60 * 1000, // 1 minute
   });
 }

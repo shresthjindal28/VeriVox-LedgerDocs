@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { setAuthCookies, clearAuthCookies } from '@/lib/cookies';
 import type { User, TokenResponse, Profile, StudyPreferences } from '@/types';
 
 interface AuthState {
@@ -74,10 +75,10 @@ export const useAuthStore = create<AuthState>()(
       setInitialized: (isInitialized) => set({ isInitialized }),
       
       login: (tokens, user) => {
-        // Also store in localStorage for API client
         if (typeof window !== 'undefined') {
           localStorage.setItem('access_token', tokens.access_token);
           localStorage.setItem('refresh_token', tokens.refresh_token);
+          setAuthCookies(tokens.access_token, tokens.refresh_token);
         }
         const updates: Partial<AuthState> = {
           accessToken: tokens.access_token,
@@ -92,10 +93,10 @@ export const useAuthStore = create<AuthState>()(
       },
       
       logout: () => {
-        // Clear localStorage tokens
         if (typeof window !== 'undefined') {
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
+          clearAuthCookies();
         }
         set({
           ...initialState,

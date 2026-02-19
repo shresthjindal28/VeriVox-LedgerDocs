@@ -38,10 +38,10 @@ async def get_document_owner(
     """
     try:
         # Query the document_ownership table using admin client (bypasses RLS)
-        # Note: Supabase client is synchronous, so no await needed
+        # Exclude soft-deleted documents
         result = supabase.admin_table("document_ownership").select(
             "user_id"
-        ).eq("document_id", document_id).execute()
+        ).eq("document_id", document_id).eq("is_deleted", False).execute()
         
         # Check if result has data
         if not result.data or len(result.data) == 0:
@@ -69,6 +69,7 @@ async def get_document_owner(
 async def register_document_ownership(
     document_id: str,
     user_id: str,
+    filename: Optional[str] = None,
     x_service_key: Optional[str] = Header(None, alias="X-Service-Key"),
 ):
     """
@@ -78,7 +79,8 @@ async def register_document_ownership(
     
     Args:
         document_id: The document UUID
-        user_id: The user who owns the document
+        user_id: The user who owns the document (query param)
+        filename: Optional original filename (query param)
         x_service_key: Optional service authentication key
     
     Returns:
@@ -86,10 +88,10 @@ async def register_document_ownership(
     """
     try:
         # Upsert the ownership record using admin client
-        result = supabase.admin_table("document_ownership").upsert({
-            "document_id": document_id,
-            "user_id": user_id,
-        }).execute()
+        record = {"document_id": document_id, "user_id": user_id, "is_deleted": False}
+        if filename:
+            record["filename"] = filename
+        result = supabase.admin_table("document_ownership").upsert(record).execute()
         
         logger.info(f"Registered ownership: document={document_id}, user={user_id}")
         
@@ -109,23 +111,23 @@ async def remove_document_ownership(
     x_service_key: Optional[str] = Header(None, alias="X-Service-Key"),
 ):
     """
-    Remove document ownership record.
+    Soft-delete document ownership record.
     
-    Called when a document is deleted.
+    Sets is_deleted=true so the document is hidden from UI everywhere.
     
     Args:
         document_id: The document UUID
         x_service_key: Optional service authentication key
     
     Returns:
-        {"success": True} if removed
+        {"success": True} if updated
     """
     try:
-        result = supabase.admin_table("document_ownership").delete().eq(
-            "document_id", document_id
-        ).execute()
+        result = supabase.admin_table("document_ownership").update(
+            {"is_deleted": True}
+        ).eq("document_id", document_id).execute()
         
-        logger.info(f"Removed ownership record for document: {document_id}")
+        logger.info(f"Soft-deleted ownership record for document: {document_id}")
         
         return {"success": True, "document_id": document_id}
         
@@ -155,7 +157,7 @@ async def get_user_documents(
     try:
         result = supabase.admin_table("document_ownership").select(
             "document_id, created_at"
-        ).eq("user_id", user_id).order("created_at", desc=True).execute()
+        ).eq("user_id", user_id).eq("is_deleted", False).order("created_at", desc=True).execute()
         
         return {"documents": result.data or []}
         

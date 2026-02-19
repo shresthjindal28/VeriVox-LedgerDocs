@@ -5,25 +5,23 @@ import { useVoiceCall } from '@/hooks/use-voice';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { HighlightItem } from '@/components/pdf';
-import { 
-  PhoneCall, 
-  PhoneOff, 
-  Mic, 
-  MicOff, 
-  Square,
+import {
+  Mic,
+  MicOff,
+  PhoneOff,
   Loader2,
-  Volume2,
-  User,
-  Bot
+  X
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface VoiceCallProps {
   documentId: string;
   className?: string;
   onHighlights?: (highlights: HighlightItem[]) => void;
+  onClose?: () => void;
 }
 
-export function VoiceCall({ documentId, className, onHighlights }: VoiceCallProps) {
+export function VoiceCall({ documentId, className, onHighlights, onClose }: VoiceCallProps) {
   const {
     callState,
     greeting,
@@ -40,11 +38,10 @@ export function VoiceCall({ documentId, className, onHighlights }: VoiceCallProp
     isInCall,
     formatDuration,
   } = useVoiceCall(documentId);
-  
+
   // Forward highlights to parent when they change
   React.useEffect(() => {
     if (onHighlights && highlights && highlights.length > 0) {
-      // Map to HighlightItem format
       const mappedHighlights: HighlightItem[] = highlights
         .filter(h => h.bounding_box || h.normalized_box)
         .map((h) => ({
@@ -61,237 +58,267 @@ export function VoiceCall({ documentId, className, onHighlights }: VoiceCallProp
     }
   }, [highlights, onHighlights]);
 
-  const renderCallState = () => {
+  // Auto-start call when component mounts if not already in call
+  React.useEffect(() => {
+    if (!isInCall() && callState === 'idle') {
+      startCall();
+    }
+  }, [isInCall, callState, startCall]);
+
+  // Handle closing: end the WebSocket call, then dismiss the overlay
+  const handleClose = React.useCallback(() => {
+    console.log("[VoiceCall UI] handleClose called, isInCall:", isInCall());
+    endCall();
+    onClose?.();
+  }, [isInCall, endCall, onClose]);
+
+  // Handle stop: end the WebSocket call, then dismiss after a brief pause
+  const handleStop = React.useCallback(() => {
+    console.log("[VoiceCall UI] handleStop called");
+    endCall();
+    // Short delay so the user sees "Session Ended" before the overlay closes
+    setTimeout(() => {
+      console.log("[VoiceCall UI] closing overlay after stop");
+      onClose?.();
+    }, 600);
+  }, [endCall, onClose]);
+
+  // Cleanup on unmount — always end the call if component is removed
+  React.useEffect(() => {
+    return () => {
+      console.log("[VoiceCall UI] unmounting, calling endCall");
+      endCall();
+    };
+  }, [endCall]);
+
+  const renderVisualizer = () => {
+    const isAiSpeaking = callState === 'ai_speaking';
+    const isUserSpeaking = callState === 'user_speaking';
+    const isProcessing = callState === 'processing';
+
+    return (
+      <div className="relative flex items-center justify-center h-64 w-64 mx-auto my-12">
+        {/* Ambient Glow / Aura */}
+        <motion.div
+          animate={{
+            scale: isAiSpeaking ? [1, 1.2, 1] : isUserSpeaking ? [1, 1.1, 1] : 1,
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+            rotate: { duration: 20, repeat: Infinity, ease: "linear" }
+          }}
+          className={cn(
+            "absolute inset-0 rounded-full blur-[60px] opacity-40",
+            titleGradient(callState)
+          )}
+        />
+
+        {/* Core Orb */}
+        <div className="relative h-32 w-32">
+          {/* Fluid Gradient Mesh */}
+          <motion.div
+            animate={{
+              rotate: [0, -360],
+              scale: isAiSpeaking ? [1, 1.1, 1] : isProcessing ? [1, 0.9, 1] : 1,
+            }}
+            transition={{
+              rotate: { duration: 15, repeat: Infinity, ease: "linear" },
+              scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+            }}
+            className={cn(
+              "absolute inset-0 rounded-full bg-gradient-to-br opacity-90 blur-xl",
+              gradientColors(callState)
+            )}
+          />
+
+          {/* Inner Core */}
+          <motion.div
+            animate={{
+              scale: isUserSpeaking ? [1, 0.9, 1] : [1, 1.05, 1],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute inset-2 rounded-full bg-white/20 backdrop-blur-2xl border border-white/30 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)]"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const titleGradient = (state: string) => {
+    switch (state) {
+      case 'ai_speaking': return "bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500";
+      case 'user_speaking': return "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500";
+      case 'processing': return "bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500";
+      case 'error': return "bg-gradient-to-r from-red-500 via-orange-500 to-red-500";
+      default: return "bg-gradient-to-r from-brand-500 via-amber-500 to-yellow-500";
+    }
+  };
+
+  const gradientColors = (state: string) => {
+    switch (state) {
+      case 'ai_speaking': return "from-cyan-400 via-blue-500 to-purple-600";
+      case 'user_speaking': return "from-emerald-400 via-teal-500 to-cyan-600";
+      case 'processing': return "from-pink-400 via-rose-500 to-orange-600";
+      case 'error': return "from-red-500 via-orange-500 to-red-600";
+      default: return "from-brand-400 via-amber-500 to-yellow-600";
+    }
+  };
+
+  const getStatusText = () => {
     switch (callState) {
-      case 'connecting':
-        return (
-          <div className="flex items-center gap-2 text-yellow-600">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Connecting...</span>
-          </div>
-        );
-      case 'connected':
-        return (
-          <div className="flex items-center gap-2 text-green-600">
-            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span>Connected - Start speaking</span>
-          </div>
-        );
-      case 'user_speaking':
-        return (
-          <div className="flex items-center gap-2 text-blue-600">
-            <User className="h-4 w-4" />
-            <span>Listening...</span>
-          </div>
-        );
-      case 'processing':
-        return (
-          <div className="flex items-center gap-2 text-amber-600">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Processing...</span>
-          </div>
-        );
-      case 'ai_speaking':
-        return (
-          <div className="flex items-center gap-2 text-purple-600">
-            <Bot className="h-4 w-4" />
-            <Volume2 className="h-4 w-4 animate-pulse" />
-            <span>AI Speaking</span>
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="flex items-center gap-2 text-red-600">
-            <span>Error: {error}</span>
-          </div>
-        );
-      case 'ended':
-        return (
-          <div className="flex items-center gap-2 text-gray-600">
-            <span>Call ended</span>
-          </div>
-        );
-      default:
-        return null;
+      case 'connecting': return 'Connecting...';
+      case 'connected': return 'Listening...';
+      case 'user_speaking': return 'Listening...';
+      case 'processing': return 'Thinking...';
+      case 'ai_speaking': return 'Speaking...';
+      case 'error': return 'Connection Issue';
+      case 'ended': return 'Session Ended';
+      default: return 'Ready';
     }
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 p-4 rounded-lg border bg-card", className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Voice Call</h3>
-        {isInCall() && (
-          <span className="text-sm font-mono text-muted-foreground">
-            {formatDuration()}
-          </span>
-        )}
-      </div>
+    <div className={cn("flex flex-col h-full bg-black/90 backdrop-blur-3xl text-white relative overflow-hidden", className)}>
+      {/* Close Button (Top Right) — also terminates the WebSocket */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-6 right-6 text-white/40 hover:text-white hover:bg-white/10 z-50 rounded-full"
+        onClick={handleClose}
+      >
+        <X className="h-6 w-6" />
+      </Button>
 
-      {/* Call State Indicator */}
-      <div className="min-h-[24px]">
-        {renderCallState()}
-      </div>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center z-10">
 
-      {/* Greeting */}
-      {greeting && callState === 'connected' && (
-        <div className="p-3 rounded-md bg-muted/50 text-sm">
-          <p className="text-muted-foreground">{greeting}</p>
-        </div>
-      )}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4"
+        >
+          <h3 className="text-xl font-medium tracking-tight text-white/90">VeriVox Intelligence</h3>
+        </motion.div>
 
-      {/* Transcriptions */}
-      {isInCall() && (transcription || aiTranscript) && (
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {transcription && (
-            <div className="flex gap-2">
-              <User className="h-4 w-4 mt-1 text-blue-500 shrink-0" />
-              <p className="text-sm">{transcription}</p>
-            </div>
+        {renderVisualizer()}
+
+        <motion.div className="h-8 mb-8 flex flex-col items-center justify-center">
+          <p className={cn(
+            "text-sm font-medium tracking-widest uppercase transition-colors duration-500 flex items-center gap-2",
+            callState === 'error' ? "text-red-400" : "text-white/60"
+          )}>
+            {callState === 'processing' && <Loader2 className="h-3 w-3 animate-spin" />}
+            {getStatusText()}
+          </p>
+          {isInCall() && (
+            <span className="text-xs font-mono text-white/20 mt-1">
+              {formatDuration()}
+            </span>
           )}
-          {aiTranscript && (
-            <div className="flex gap-2">
-              <Bot className="h-4 w-4 mt-1 text-purple-500 shrink-0" />
-              <p className="text-sm text-muted-foreground">{aiTranscript}</p>
-            </div>
-          )}
-        </div>
-      )}
+        </motion.div>
 
-      {/* Error Message */}
-      {error && callState !== 'error' && (
-        <div className="p-2 rounded-md bg-red-50 text-red-600 text-sm">
-          {error}
-        </div>
-      )}
 
-      {/* Call Controls */}
-      <div className="flex items-center gap-2 justify-center pt-2">
-        {!isInCall() ? (
-          <Button
-            onClick={startCall}
-            size="lg"
-            className="gap-2 bg-green-600 hover:bg-green-700"
-          >
-            <PhoneCall className="h-5 w-5" />
-            Start Call
-          </Button>
-        ) : (
-          <>
-            {/* Mute Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleMute}
-              className={cn(
-                "h-12 w-12 rounded-full",
-                isMuted && "bg-red-100 border-red-300"
-              )}
-            >
-              {isMuted ? (
-                <MicOff className="h-5 w-5 text-red-600" />
-              ) : (
-                <Mic className="h-5 w-5" />
-              )}
-            </Button>
-
-            {/* Interrupt Button (when AI is speaking) */}
-            {callState === 'ai_speaking' && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={interrupt}
-                className="h-12 w-12 rounded-full"
+        {/* Transcriptions */}
+        <div className="h-24 w-full max-w-lg mx-auto flex items-end justify-center px-4 overflow-hidden relative">
+          {/* Gradient fade at top */}
+          <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
+          <AnimatePresence mode="wait">
+            {aiTranscript ? (() => {
+              // Strip markdown formatting: **bold**, __bold__, *italic*, _italic_, ## headers, etc.
+              const clean = aiTranscript
+                .replace(/#{1,6}\s?/g, '')      // remove ## headers
+                .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold** → bold
+                .replace(/__([^_]+)__/g, '$1')    // __bold__ → bold
+                .replace(/\*([^*]+)\*/g, '$1')    // *italic* → italic
+                .replace(/_([^_]+)_/g, '$1')      // _italic_ → italic
+                .replace(/`([^`]+)`/g, '$1')      // `code` → code
+                .replace(/\n+/g, ' ')             // newlines → spaces
+                .trim();
+              // Show only the last ~200 characters
+              const truncated = clean.length > 200
+                ? '…' + clean.slice(-200)
+                : clean;
+              return (
+                <motion.p
+                  key="ai"
+                  initial={{ opacity: 0, filter: "blur(10px)" }}
+                  animate={{ opacity: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, filter: "blur(10px)" }}
+                  className="text-sm md:text-base text-white/80 font-light leading-relaxed text-center"
+                >
+                  {truncated}
+                </motion.p>
+              );
+            })() : transcription ? (
+              <motion.p
+                key="user"
+                initial={{ opacity: 0, filter: "blur(5px)" }}
+                animate={{ opacity: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, filter: "blur(5px)" }}
+                className="text-sm md:text-base text-white/50 font-light italic text-center"
               >
-                <Square className="h-5 w-5" />
-              </Button>
-            )}
-
-            {/* End Call Button */}
-            <Button
-              onClick={endCall}
-              size="icon"
-              variant="destructive"
-              className="h-12 w-12 rounded-full"
-            >
-              <PhoneOff className="h-5 w-5" />
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Call ended summary */}
-      {callState === 'ended' && callDuration > 0 && (
-        <div className="text-center text-sm text-muted-foreground">
-          <p>Call duration: {formatDuration()}</p>
-          <Button
-            variant="link"
-            size="sm"
-            onClick={startCall}
-            className="mt-2"
-          >
-            Start new call
-          </Button>
+                &ldquo;{transcription.length > 150 ? '…' + transcription.slice(-150) : transcription}&rdquo;
+              </motion.p>
+            ) : greeting ? (
+              <motion.p
+                key="greeting"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-base text-white/40 font-light text-center"
+              >
+                {greeting}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
         </div>
-      )}
+
+        {/* Controls */}
+        <div className="mt-auto mb-12">
+          {!isInCall() ? (
+            <Button
+              onClick={startCall}
+              size="lg"
+              className="h-16 px-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white font-medium transition-all hover:scale-105"
+            >
+              <Mic className="h-5 w-5 mr-3" />
+              Start Conversation
+            </Button>
+          ) : (
+            <div className="flex items-center gap-4">
+              {/* Mute / Unmute */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleMute}
+                className={cn(
+                  "h-14 w-14 rounded-full transition-all border",
+                  isMuted
+                    ? "text-red-400 bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
+                    : "text-white/80 bg-white/5 border-white/10 hover:bg-white/10"
+                )}
+              >
+                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </Button>
+
+              {/* End Call — prominent red button */}
+              <Button
+                onClick={handleStop}
+                size="icon"
+                className="h-16 w-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30 hover:shadow-red-500/50 transition-all hover:scale-105 active:scale-95"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
 
-/**
- * Compact version for floating UI
- */
-interface VoiceCallButtonProps {
-  documentId: string;
-  onClick?: () => void;
-  className?: string;
-}
-
-export function VoiceCallButton({ documentId, onClick, className }: VoiceCallButtonProps) {
-  const {
-    callState,
-    startCall,
-    endCall,
-    isInCall,
-    formatDuration,
-  } = useVoiceCall(documentId);
-
-  const handleStartCall = () => {
-    if (onClick) onClick();
-    startCall();
-  };
-
-  if (!isInCall()) {
-    return (
-      <Button
-        onClick={handleStartCall}
-        size="icon"
-        className={cn("h-14 w-14 rounded-full bg-green-600 hover:bg-green-700 shadow-lg", className)}
-        title="Start voice call"
-      >
-        <PhoneCall className="h-6 w-6" />
-      </Button>
-    );
-  }
-
-  return (
-    <div className={cn("flex items-center gap-2 bg-card rounded-full shadow-lg p-2 border", className)}>
-      <span className="text-sm font-mono px-2">{formatDuration()}</span>
-      <div className={cn(
-        "h-3 w-3 rounded-full",
-        callState === 'ai_speaking' ? "bg-purple-500 animate-pulse" :
-        callState === 'user_speaking' ? "bg-blue-500 animate-pulse" :
-        callState === 'processing' ? "bg-amber-500 animate-pulse" :
-        "bg-green-500"
-      )} />
-      <Button
-        onClick={endCall}
-        size="icon"
-        variant="destructive"
-        className="h-10 w-10 rounded-full"
-      >
-        <PhoneOff className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-}

@@ -23,12 +23,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   
   React.useEffect(() => {
     const initAuth = async () => {
-      // Sync tokens to localStorage for API client
-      if (typeof window !== 'undefined' && accessToken) {
+      // Sync tokens to localStorage and cookies (persists across restarts)
+      if (typeof window !== 'undefined' && accessToken && refreshToken) {
         localStorage.setItem('access_token', accessToken);
-        if (refreshToken) {
-          localStorage.setItem('refresh_token', refreshToken);
-        }
+        localStorage.setItem('refresh_token', refreshToken);
+        const { setAuthCookies } = await import("@/lib/cookies");
+        setAuthCookies(accessToken, refreshToken);
       }
       
       if (!accessToken) {

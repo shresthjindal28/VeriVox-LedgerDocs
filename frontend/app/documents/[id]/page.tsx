@@ -3,19 +3,20 @@
 import * as React from 'react';
 import { useParams } from 'next/navigation';
 import { useDocument, useAskQuestion } from '@/hooks';
-import { useAudioRecorder, useVoiceChatWithAudio, useVoiceCall } from '@/hooks/use-voice';
+import { useAudioRecorder, useVoiceChatWithAudio } from '@/hooks/use-voice';
 import { useChatStore } from '@/stores';
 import { PDFViewer, HighlightItem } from '@/components/pdf';
 import { ChatPanel } from '@/components/chat';
-import { VoiceCall, VoiceCallButton } from '@/components/voice/voice-call';
+import { VoiceCall } from '@/components/voice/voice-call';
 import { VerificationPanel } from '@/components/verification';
-import { LoadingOverlay, Spinner } from '@/components/ui';
+import { LoadingOverlay } from '@/components/ui';
 import { cn, formatFileSize } from '@/lib/utils';
-import { PanelLeftClose, PanelLeft, Mic, MicOff, Phone, Shield, ChevronLeft, FileText, Download, Share2 } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, Phone, Shield, ChevronLeft, Download, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { AppLayout } from '@/components/layout';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { SourceReference } from '@/types';
+import { AppLayout } from '@/components/layout';
 
 export default function DocumentPage() {
   const params = useParams();
@@ -83,13 +84,21 @@ export default function DocumentPage() {
   };
 
   if (isDocLoading) {
-    return <LoadingOverlay message="Loading document..." />;
+    return <LoadingOverlay message="Loading workspace..." />;
   }
 
   if (!document) {
     return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-black text-white">
-        <p className="text-muted-foreground">Document not found</p>
+      <div className="flex h-screen items-center justify-center bg-black text-white">
+        <div className="text-center space-y-4">
+          <div className="size-16 rounded-full bg-brand-900/20 flex items-center justify-center mx-auto border border-brand-500/20">
+            <FileText className="size-8 text-brand-500/50" />
+          </div>
+          <h2 className="text-xl font-medium text-white">Document not found</h2>
+          <Link href="/dashboard">
+            <Button variant="outline" className="mt-4 border-brand-500/30 hover:bg-brand-500/10">Return to Dashboard</Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -97,44 +106,51 @@ export default function DocumentPage() {
   const pdfUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/documents/${documentId}/file`;
 
   return (
-    <div className="flex h-screen flex-col bg-black overflow-hidden">
-      <div className="relative z-50">
-        {/* Navbar removed */}
-      </div>
+    <AppLayout layoutMode="fullscreen">
+      <div className="flex flex-col h-full w-full bg-black overflow-hidden selection:bg-brand-500/30">
+        {/* Main Content Area */}
+        <div className="flex flex-1 overflow-hidden relative z-10 text-brand-100">
 
-      <div className="flex flex-1 overflow-hidden pt-20 relative z-0">
-        {/* Background Effects */}
-        <div className="fixed inset-0 z-0 pointer-events-none opacity-20">
-          <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[128px]" />
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-        </div>
-
-        {/* PDF Viewer Area */}
-        <div
-          className={cn(
-            'transition-all duration-300 relative z-10 bg-white/5 border-r border-white/10 flex flex-col',
-            isPdfVisible ? 'w-1/2' : 'w-0 overflow-hidden'
-          )}
-        >
-          {isPdfVisible && (
-            <>
-              <div className="h-12 border-b border-white/10 flex items-center justify-between px-4 bg-white/5 backdrop-blur-sm">
-                <div className="flex items-center gap-2">
-                  <Link href="/documents" className="text-brand-100/60 hover:text-brand-500 transition-colors">
-                    <ChevronLeft className="h-5 w-5" />
-                  </Link>
-                  <span className="text-sm font-medium text-white truncate max-w-[200px]">{document.filename}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-brand-100/40 bg-white/5 px-2 py-1 rounded-full">
-                    Page {currentPage} of {document.page_count}
-                  </div>
+          {/* PDF Viewer Section - width controlled by state */}
+          <motion.div
+            initial={false}
+            animate={{
+              width: isPdfVisible ? '55%' : '0%',
+              opacity: isPdfVisible ? 1 : 0
+            }}
+            transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+            className="relative flex flex-col border-r border-brand-800/20 bg-black/40 backdrop-blur-sm h-full"
+          >
+            {/* PDF Toolbar */}
+            <div className="h-14 border-b border-brand-800/20 flex items-center justify-between px-4 bg-brand-950/10 backdrop-blur-md sticky top-0 z-20 shrink-0">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <Link href="/documents" className="p-2 rounded-lg hover:bg-white/5 text-brand-100/60 hover:text-brand-100 transition-colors">
+                  <ChevronLeft className="h-5 w-5" />
+                </Link>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-sm font-medium text-white truncate max-w-[300px]">{document.filename}</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto bg-gray-900/50">
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-black/20 rounded-full px-3 py-1 border border-brand-500/10">
+                  <span className="text-xs text-brand-100/60">Page</span>
+                  <span className="text-xs font-mono text-brand-500 font-bold">{currentPage}</span>
+                  <span className="text-xs text-brand-100/40">/ {document.page_count}</span>
+                </div>
+                <div className="h-4 w-px bg-brand-800/20 mx-1" />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-brand-100/60 hover:text-white hover:bg-white/5">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* PDF Content - fills remaining height */}
+            <div className="flex-1 overflow-hidden relative bg-brand-950/5 h-full">
+              <div className="absolute inset-0 overflow-auto custom-scrollbar">
                 <PDFViewer
                   url={pdfUrl}
-                  className="h-full"
+                  className="min-h-full"
                   initialPage={currentPage}
                   onPageChange={setCurrentPage}
                   highlightedSources={highlightedSources}
@@ -143,121 +159,132 @@ export default function DocumentPage() {
                   onHighlightClick={handleHighlightClick}
                 />
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </motion.div>
 
-        {/* Chat Panel */}
-        <div className={cn('flex flex-1 flex-col relative z-10 bg-black/40 backdrop-blur-sm', isPdfVisible ? 'w-1/2' : 'w-full')}>
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 px-6 h-16 bg-black/20">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsPdfVisible(!isPdfVisible)}
-                title={isPdfVisible ? 'Hide PDF' : 'Show PDF'}
-                className="text-brand-100/60 hover:text-white hover:bg-white/10"
-              >
-                {isPdfVisible ? (
-                  <PanelLeftClose className="h-5 w-5" />
-                ) : (
-                  <PanelLeft className="h-5 w-5" />
-                )}
-              </Button>
-              <div>
-                <h1 className="truncate font-semibold text-white/90 text-sm md:text-base max-w-[200px] md:max-w-md" title={document.filename}>
-                  AI Chat Assistant
-                </h1>
-                <p className="text-xs text-brand-500 font-mono">
-                  {document.file_size ? formatFileSize(document.file_size) : ''} • Secure Session
-                </p>
+          {/* Intelligence Panel (Right Side) - fills remaining width */}
+          <div className="flex-1 flex flex-col relative bg-black/60 backdrop-blur-xl h-full border-l border-white/5">
+
+            {/* Intelligence Header */}
+            <div className="h-14 border-b border-brand-800/20 flex items-center justify-between px-6 bg-brand-950/20 backdrop-blur-md z-20 shrink-0">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsPdfVisible(!isPdfVisible)}
+                  className="h-8 w-8 rounded-lg text-brand-100/60 hover:text-white hover:bg-brand-500/10"
+                >
+                  {isPdfVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                </Button>
+                <div>
+                  <h2 className="text-sm font-semibold text-white tracking-tight flex items-center gap-2">
+                    VeriVox Intelligence
+                    <span className="flex size-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+                    </span>
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-black/20 p-1 rounded-lg border border-brand-800/20">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowVerification(!showVerification)}
+                  className={cn(
+                    "h-8 text-xs font-medium rounded-md transition-all gap-1.5",
+                    showVerification
+                      ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
+                      : "text-brand-100/60 hover:text-white hover:bg-white/5"
+                  )}
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  Verify
+                </Button>
+                <div className="w-px h-4 bg-white/10" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowVoiceCall(true)}
+                  className={cn(
+                    "h-8 text-xs font-medium rounded-md transition-all gap-1.5",
+                    showVoiceCall
+                      ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
+                      : "text-brand-100/60 hover:text-white hover:bg-white/5"
+                  )}
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  AI Voice
+                </Button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Verification toggle */}
-              <Button
-                variant={showVerification ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setShowVerification(!showVerification)}
-                title="Document Verification"
-                className={cn("gap-2 text-xs", showVerification ? "bg-brand-500/20 text-brand-500 hover:bg-brand-500/30" : "text-brand-100/60 hover:text-white hover:bg-white/10")}
-              >
-                <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">Verify</span>
-              </Button>
+            {/* Content Container */}
+            <div className="relative flex-1 flex flex-col overflow-hidden">
 
-              {/* Voice call toggle */}
-              <Button
-                variant={showVoiceCall ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setShowVoiceCall(!showVoiceCall)}
-                title="Voice Call"
-                className={cn("gap-2 text-xs", showVoiceCall ? "bg-brand-500/20 text-brand-500 hover:bg-brand-500/30" : "text-brand-100/60 hover:text-white hover:bg-white/10")}
-              >
-                <Phone className="h-4 w-4" />
-                <span className="hidden sm:inline">Call</span>
-              </Button>
+              {/* Verification Panel - Collapsible */}
+              <AnimatePresence>
+                {showVerification && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-brand-800/20 bg-brand-950/30 overflow-hidden shrink-0 z-10"
+                  >
+                    <div className="p-4">
+                      <VerificationPanel documentId={documentId} className="w-full" />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-              {/* Voice Record Toggle - Handled in Chat Input mostly, but keeping global control here if needed */}
+              {/* Chat Interface - Fills remaining space */}
+              <div className="flex-1 overflow-hidden relative">
+                <ChatPanel
+                  documentId={documentId}
+                  messages={messages}
+                  streamingContent={streamingMessage}
+                  onSend={handleSend}
+                  onVoiceStart={handleVoiceStart}
+                  onVoiceEnd={handleVoiceEnd}
+                  onSourceClick={handleSourceClick}
+                  isLoading={isChatLoading || askQuestion.isPending}
+                  isRecording={isRecording}
+                  className="flex-1 h-full pb-0"
+                />
+              </div>
+
+              {/* Voice Call Overlay - Full Coverage of Intelligence Panel */}
+              <AnimatePresence>
+                {showVoiceCall && (
+                  <motion.div
+                    initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                    animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+                    exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute inset-0 z-50 bg-black/80 flex flex-col"
+                  >
+                    <VoiceCall
+                      documentId={documentId}
+                      onHighlights={(newHighlights) => {
+                        setHighlights(newHighlights);
+                        if (newHighlights.length > 0) {
+                          setActiveHighlightId(newHighlights[0].id);
+                          setCurrentPage(newHighlights[0].page);
+                        }
+                      }}
+                      onClose={() => setShowVoiceCall(false)}
+                      className="w-full h-full bg-transparent"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </div>
           </div>
-
-          {/* Verification Panel */}
-          {showVerification && (
-            <div className="border-b border-white/10 p-4 bg-brand-950/30 animate-in slide-in-from-top-2">
-              <VerificationPanel
-                documentId={documentId}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          {/* Voice Call Panel */}
-          {showVoiceCall && (
-            <div className="border-b border-white/10 p-4 bg-brand-950/30 animate-in slide-in-from-top-2">
-              <VoiceCall
-                documentId={documentId}
-                onHighlights={(newHighlights) => {
-                  setHighlights(newHighlights);
-                  if (newHighlights.length > 0) {
-                    setActiveHighlightId(newHighlights[0].id);
-                    setCurrentPage(newHighlights[0].page);
-                  }
-                }}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          {/* Chat */}
-          <div className="flex-1 overflow-hidden relative">
-            <ChatPanel
-              documentId={documentId}
-              messages={messages}
-              streamingContent={streamingMessage}
-              onSend={handleSend}
-              onVoiceStart={handleVoiceStart}
-              onVoiceEnd={handleVoiceEnd}
-              onSourceClick={handleSourceClick}
-              isLoading={isChatLoading || askQuestion.isPending}
-              isRecording={isRecording}
-              className="flex-1 h-full"
-            />
-          </div>
-
         </div>
-
-        {/* Floating Voice Call Button */}
-        {!showVoiceCall && !isRecording && (
-          <VoiceCallButton
-            documentId={documentId}
-            onClick={() => setShowVoiceCall(true)}
-            className="fixed bottom-6 right-6 shadow-xl shadow-brand-500/20 z-50 hover:scale-105 transition-transform"
-          />
-        )}
       </div>
-    </div>
+    </AppLayout>
   );
 }

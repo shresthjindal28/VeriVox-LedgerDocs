@@ -1,17 +1,22 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { authApi, profileApi } from '@/lib/api';
-import { useAuthStore } from '@/stores';
-import type { LoginRequest, RegisterRequest, ProfileUpdate, StudyPreferences } from '@/types';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { authApi, profileApi } from "@/lib/api";
+import { useAuthStore } from "@/stores";
+import type {
+  LoginRequest,
+  RegisterRequest,
+  ProfileUpdate,
+  StudyPreferences,
+} from "@/types";
 
 // Query keys
 export const authKeys = {
-  all: ['auth'] as const,
-  user: () => [...authKeys.all, 'user'] as const,
-  profile: () => [...authKeys.all, 'profile'] as const,
-  fullProfile: () => [...authKeys.all, 'fullProfile'] as const,
-  preferences: () => [...authKeys.all, 'preferences'] as const,
+  all: ["auth"] as const,
+  user: () => [...authKeys.all, "user"] as const,
+  profile: () => [...authKeys.all, "profile"] as const,
+  fullProfile: () => [...authKeys.all, "fullProfile"] as const,
+  preferences: () => [...authKeys.all, "preferences"] as const,
 };
 
 // ============================================================================
@@ -19,8 +24,9 @@ export const authKeys = {
 // ============================================================================
 
 export function useCurrentUser() {
-  const { isAuthenticated, setUser, setLoading, setInitialized } = useAuthStore();
-  
+  const { isAuthenticated, setUser, setLoading, setInitialized } =
+    useAuthStore();
+
   return useQuery({
     queryKey: authKeys.user(),
     queryFn: async () => {
@@ -37,7 +43,7 @@ export function useCurrentUser() {
 export function useLogin() {
   const queryClient = useQueryClient();
   const { login, setLoading, setError } = useAuthStore();
-  
+
   return useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onMutate: () => {
@@ -59,7 +65,7 @@ export function useLogin() {
 
 export function useRegister() {
   const { setLoading, setError } = useAuthStore();
-  
+
   return useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
     onMutate: () => {
@@ -78,7 +84,7 @@ export function useRegister() {
 export function useLogout() {
   const queryClient = useQueryClient();
   const { logout } = useAuthStore();
-  
+
   return useMutation({
     mutationFn: () => authApi.logout(),
     onSuccess: () => {
@@ -95,10 +101,10 @@ export function useLogout() {
 
 export function useRefreshToken() {
   const { refreshToken, setTokens, logout } = useAuthStore();
-  
+
   return useMutation({
     mutationFn: () => {
-      if (!refreshToken) throw new Error('No refresh token');
+      if (!refreshToken) throw new Error("No refresh token");
       return authApi.refreshToken(refreshToken);
     },
     onSuccess: (data) => {
@@ -128,7 +134,7 @@ export function useUpdatePassword() {
 
 export function useProfile() {
   const { setProfile, isAuthenticated } = useAuthStore();
-  
+
   return useQuery({
     queryKey: authKeys.profile(),
     queryFn: async () => {
@@ -143,7 +149,7 @@ export function useProfile() {
 
 export function useFullProfile() {
   const { isAuthenticated } = useAuthStore();
-  
+
   return useQuery({
     queryKey: authKeys.fullProfile(),
     queryFn: () => profileApi.getFullProfile(),
@@ -155,7 +161,7 @@ export function useFullProfile() {
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   const { setProfile } = useAuthStore();
-  
+
   return useMutation({
     mutationFn: (data: ProfileUpdate) => profileApi.updateProfile(data),
     onSuccess: (data) => {
@@ -168,7 +174,7 @@ export function useUpdateProfile() {
 
 export function usePreferences() {
   const { setPreferences, isAuthenticated } = useAuthStore();
-  
+
   return useQuery({
     queryKey: authKeys.preferences(),
     queryFn: async () => {
@@ -184,12 +190,45 @@ export function usePreferences() {
 export function useUpdatePreferences() {
   const queryClient = useQueryClient();
   const { setPreferences } = useAuthStore();
-  
+
   return useMutation({
-    mutationFn: (data: Partial<StudyPreferences>) => profileApi.updatePreferences(data),
+    mutationFn: (data: Partial<StudyPreferences>) =>
+      profileApi.updatePreferences(data),
     onSuccess: (data) => {
       setPreferences(data);
       queryClient.invalidateQueries({ queryKey: authKeys.preferences() });
+    },
+  });
+}
+
+// ============================================================================
+// Avatar Hooks
+// ============================================================================
+
+export function useUploadAvatar() {
+  const queryClient = useQueryClient();
+  const { setProfile } = useAuthStore();
+
+  return useMutation({
+    mutationFn: (file: File) => profileApi.uploadAvatar(file),
+    onSuccess: (data) => {
+      setProfile(data);
+      queryClient.invalidateQueries({ queryKey: authKeys.profile() });
+      queryClient.invalidateQueries({ queryKey: authKeys.fullProfile() });
+    },
+  });
+}
+
+export function useDeleteAvatar() {
+  const queryClient = useQueryClient();
+  const { setProfile } = useAuthStore();
+
+  return useMutation({
+    mutationFn: () => profileApi.deleteAvatar(),
+    onSuccess: (data) => {
+      setProfile(data);
+      queryClient.invalidateQueries({ queryKey: authKeys.profile() });
+      queryClient.invalidateQueries({ queryKey: authKeys.fullProfile() });
     },
   });
 }

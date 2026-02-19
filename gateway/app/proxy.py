@@ -102,27 +102,29 @@ class ProxyService:
         request: Request,
         service: str,
         path: str,
-        extra_headers: Dict[str, str] = None
+        extra_headers: Dict[str, str] = None,
+        body: Optional[bytes] = None,
     ) -> Response:
         """
         Proxy a request to a backend service.
-        
+
         Args:
             request: FastAPI request
             service: Service name ("pdf" or "user")
             path: Path on the target service
             extra_headers: Additional headers to include
-        
+            body: Optional body to send (if None, forwards request body)
+
         Returns:
             FastAPI Response
         """
         service_url = self.get_service_url(service)
         target_url = urljoin(service_url, path)
-        
+
         # Include query string
         if request.url.query:
             target_url = f"{target_url}?{request.url.query}"
-        
+
         logger.info(
             "Proxying request",
             method=request.method,
@@ -130,13 +132,17 @@ class ProxyService:
             service=service,
             target=target_url
         )
-        
+
         try:
-            # Read request body
-            body = await request.body()
+            # Use provided body or read from request
+            if body is None:
+                body = await request.body()
             
             # Prepare headers
             headers = self._prepare_headers(request, extra_headers)
+            # When overriding body, drop Content-Length so it's set from actual content
+            if body is not None:
+                headers.pop("content-length", None)
             
             # Make request
             response = await self.client.request(

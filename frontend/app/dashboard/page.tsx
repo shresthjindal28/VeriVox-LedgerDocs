@@ -1,19 +1,27 @@
 'use client';
 
 import * as React from 'react';
-import { StatsCards, DocumentsTable, RecentCalls, BlockchainProofCard } from '@/components/dashboard';
-import { useDashboardStats, useDashboardDocuments, useRecentSessions, useBlockchainProofs } from '@/hooks';
+import { StatsCards, DocumentsTable, RecentCalls, RecentExtractions, BlockchainProofCard } from '@/components/dashboard';
+import { useDashboardStats, useDashboardDocuments, useRecentSessions, useRecentExtractions, useBlockchainProofs, useProfile } from '@/hooks';
 import { AppLayout } from '@/components/layout';
 import { Bell, Search } from 'lucide-react';
 import { useAuthStore } from '@/stores';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
+  const { data: profileData } = useProfile();
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats();
   const { data: docsData, isLoading: documentsLoading, error: documentsError } = useDashboardDocuments(1, 50);
   const { data: sessionsData, isLoading: sessionsLoading, error: sessionsError } = useRecentSessions(20, 0);
   const { data: proofsData, isLoading: proofsLoading, error: proofsError } = useBlockchainProofs(50, 0);
+  const { data: extractionsData, isLoading: extractionsLoading, error: extractionsError } = useRecentExtractions(20, 0);
+
+  const currentProfile = profileData || profile;
+  const avatarUrl = currentProfile?.avatar_url;
+  const userName = currentProfile?.display_name || user?.display_name || 'User';
+  const initials = userName[0]?.toUpperCase() || 'U';
 
   return (
     <AppLayout>
@@ -29,23 +37,23 @@ export default function DashboardPage() {
               <Bell className="w-5 h-5" />
               <div className="absolute top-0 right-0 w-2 h-2 bg-brand-500 rounded-full border border-black"></div>
             </button>
-            <div className="h-8 w-8 rounded-full bg-brand-500/20 overflow-hidden border border-brand-500/30">
-              {/* Placeholder Avatar */}
-              <Image
-                src="/avatar-placeholder.png"
-                alt="User"
-                width={32}
-                height={32}
-                className="object-cover"
-                onError={(e) => {
-                  // Fallback to initial if image fails
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div className="w-full h-full flex items-center justify-center text-xs font-bold text-brand-500 bg-brand-900">
-                {user?.display_name ? user.display_name[0].toUpperCase() : 'M'}
+            <Link href="/profile" className="block">
+              <div className="h-8 w-8 rounded-full overflow-hidden border border-brand-500/30 relative cursor-pointer hover:border-brand-500/60 transition-colors">
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={userName}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs font-bold text-black bg-gradient-to-br from-brand-400 to-brand-600">
+                    {initials}
+                  </div>
+                )}
               </div>
-            </div>
+            </Link>
           </div>
         </div>
 
@@ -53,16 +61,27 @@ export default function DashboardPage() {
           {/* Greeting */}
           <div>
             <h2 className="text-3xl font-medium text-white">
-              Welcome back, <span className="text-white">{user?.display_name?.split(' ')[0] || 'Matthew'}</span>
+              Welcome back, <span className="text-white">{userName.split(' ')[0]}</span>
             </h2>
           </div>
 
           {/* Stats Cards */}
-          <StatsCards stats={stats} isLoading={statsLoading} error={statsError ?? undefined} />
+          <StatsCards
+            stats={stats ? {
+              ...stats,
+              total_documents: docsData?.pagination?.total ?? stats.total_documents,
+              active_sessions: sessionsData?.total ?? stats.active_sessions,
+              total_proofs: proofsData?.total ||
+                (docsData?.documents?.filter(d => d.blockchain_status === 'anchored' || d.blockchain_status === 'verified').length ?? stats.total_proofs),
+            } : undefined}
+            isLoading={statsLoading}
+            error={statsError ?? undefined}
+          />
 
           {/* Main Content Grid */}
+          {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Documents */}
+            {/* Top Row: Documents & Proofs */}
             <div className="lg:col-span-2 space-y-6">
               <DocumentsTable
                 documents={docsData?.documents}
@@ -70,25 +89,32 @@ export default function DashboardPage() {
                 isLoading={documentsLoading}
                 error={documentsError ?? undefined}
               />
-
-              {/* Second Table for Mobile/Other view if needed, or just let the main one fill space. 
-                         Screenshot shows two "Your Documents" tables. I'll stick to one huge one for now 
-                         or duplicate if user really wants exact layout. 
-                         Actually, let's keep it clean with one main Documents table. 
-                     */}
             </div>
 
-            {/* Right Column: Sessions & Proofs */}
             <div className="space-y-6">
+              <BlockchainProofCard
+                proofs={proofsData?.proofs}
+                anchoredDocuments={docsData?.documents}
+                isLoading={proofsLoading}
+                error={proofsError ?? undefined}
+              />
+            </div>
+
+            {/* Bottom Row: Recent Voice Sessions */}
+            <div className="lg:col-span-3">
               <RecentCalls
                 sessions={sessionsData?.sessions}
                 isLoading={sessionsLoading}
                 error={sessionsError ?? undefined}
               />
-              <BlockchainProofCard
-                proofs={proofsData?.proofs}
-                isLoading={proofsLoading}
-                error={proofsError ?? undefined}
+            </div>
+
+            {/* Recent RAG Extractions (fetched details for Total Extractions) */}
+            <div className="lg:col-span-3">
+              <RecentExtractions
+                extractions={extractionsData?.extractions}
+                isLoading={extractionsLoading}
+                error={extractionsError ?? undefined}
               />
             </div>
           </div>

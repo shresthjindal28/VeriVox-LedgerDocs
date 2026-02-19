@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores';
-import { useLogout } from '@/hooks';
+import { useLogout, useProfile } from '@/hooks';
 import Image from 'next/image';
 
 interface SidebarProps {
@@ -27,8 +27,15 @@ interface SidebarProps {
 
 export function Sidebar({ className, isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { user } = useAuthStore();
+  const { user, profile, isAuthenticated } = useAuthStore();
   const logout = useLogout();
+  const { data: profileData } = useProfile();
+
+  const currentProfile = profileData || profile;
+  const avatarUrl = currentProfile?.avatar_url;
+  const userName = currentProfile?.display_name || user?.display_name || 'User';
+  const userEmail = user?.email || 'user@example.com';
+  const initials = userName[0]?.toUpperCase() || 'U';
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -130,37 +137,74 @@ export function Sidebar({ className, isCollapsed, onToggle }: SidebarProps) {
         ))}
       </nav>
 
-      {/* User Profile */}
-      <div className="p-4 border-t border-brand-500/10 bg-black/50">
-        <div className={cn("flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/5", isCollapsed ? "justify-center" : "")}>
-          <div className="h-10 w-10 shrink-0 rounded-full bg-linear-to-br from-brand-400 to-brand-600 flex items-center justify-center border border-brand-500/30 text-black font-bold shadow-lg shadow-brand-500/20">
-            {user?.display_name ? user.display_name[0].toUpperCase() : 'U'}
-          </div>
-
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {user?.display_name || 'User'}
-              </p>
-              <p className="text-xs text-brand-100/40 truncate">
-                {user?.email || 'user@example.com'}
-              </p>
+      {/* User Profile Section - Only show when authenticated */}
+      {isAuthenticated && (
+        <div className="p-4 border-t border-brand-500/10 bg-black/50">
+          <Link
+            href="/profile"
+            className={cn(
+              "flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/5",
+              isCollapsed ? "justify-center" : ""
+            )}
+          >
+            {/* Avatar - show profile picture or initials */}
+            <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden border border-brand-500/30 shadow-lg shadow-brand-500/20 relative">
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt={userName}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-black font-bold">
+                  {initials}
+                </div>
+              )}
             </div>
-          )}
 
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {userName}
+                </p>
+                <p className="text-xs text-brand-100/40 truncate">
+                  {userEmail}
+                </p>
+              </div>
+            )}
+          </Link>
+
+          {/* Logout button */}
           {!isCollapsed && (
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={handleLogout}
-              className="text-brand-100/40 hover:text-red-400 hover:bg-red-500/10"
+              className="w-full mt-2 text-brand-100/40 hover:text-red-400 hover:bg-red-500/10 justify-start gap-2"
               title="Log out"
             >
               <LogOut className="h-4 w-4" />
+              Log out
             </Button>
           )}
+
+          {isCollapsed && (
+            <div className="flex justify-center mt-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-brand-100/40 hover:text-red-400 hover:bg-red-500/10"
+                title="Log out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </aside>
   );
 }

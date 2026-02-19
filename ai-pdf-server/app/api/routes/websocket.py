@@ -1,5 +1,6 @@
 """WebSocket streaming routes for real-time chat."""
 
+import asyncio
 import json
 import base64
 import uuid
@@ -528,85 +529,79 @@ async def websocket_voice_call(
         document_id=document_id,
     )
     
-    # Callback functions for OpenAI events
-    async def on_state_change(state: CallState):
+    # Ordered send queue: prevents WebSocket write interleaving that causes
+    # audio chunks and state changes to arrive out of order at the client.
+    # Previously each callback spawned an independent asyncio.create_task,
+    # leading to race conditions where hundreds of concurrent tasks fought
+    # to write to the same WebSocket.
+    send_queue: asyncio.Queue = asyncio.Queue()
+
+    async def _send_worker():
+        """Drain send_queue and write messages to the client in strict order."""
         try:
-            await websocket.send_json({
-                "type": "state_change",
-                "state": state.value
-            })
-        except Exception as e:
-            logger.error(f"Failed to send state change: {e}")
-    
-    async def on_audio(audio_bytes: bytes):
+            while True:
+                msg = await send_queue.get()
+                if msg is None:  # Sentinel: shut down
+                    break
+                try:
+                    await websocket.send_json(msg)
+                except Exception as e:
+                    logger.error(f"Failed to send queued message: {e}")
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    send_task = asyncio.create_task(_send_worker())
+
+    # Callbacks enqueue messages for strictly ordered delivery
+    def sync_on_state_change(state):
+        try:
+            send_queue.put_nowait({"type": "state_change", "state": state.value})
+        except Exception:
+            pass
+
+    def sync_on_audio(audio_bytes):
         try:
             audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
-            await websocket.send_json({
-                "type": "audio_chunk",
-                "data": audio_b64
-            })
-        except Exception as e:
-            logger.error(f"Failed to send audio chunk: {e}")
-    
-    async def on_transcript(role: str, text: str):
+            send_queue.put_nowait({"type": "audio_chunk", "data": audio_b64})
+        except Exception:
+            pass
+
+    def sync_on_transcript(role, text):
         try:
-            # Track conversation history
+            # Track conversation history (synchronous bookkeeping)
             if call_session and role in ["user", "assistant"]:
                 call_session.add_message(role, text)
-            
-            await websocket.send_json({
-                "type": "transcription",
-                "role": role,
-                "text": text
-            })
-        except Exception as e:
-            logger.error(f"Failed to send transcription: {e}")
-    
-    async def on_error(error_msg: str):
-        try:
-            await websocket.send_json({
-                "type": "error",
-                "message": error_msg,
-                "code": "openai_error"
-            })
-        except Exception as e:
-            logger.error(f"Failed to send error: {e}")
-    
-    async def on_highlights(highlights: list):
-        """Send highlights to frontend for PDF visualization."""
-        try:
-            await websocket.send_json({
-                "type": "highlights",
-                "highlights": highlights
-            })
-        except Exception as e:
-            logger.error(f"Failed to send highlights: {e}")
-    
-    # Sync wrappers for callbacks
-    def sync_on_state_change(state):
-        import asyncio
-        asyncio.create_task(on_state_change(state))
-    
-    def sync_on_audio(audio_bytes):
-        import asyncio
-        asyncio.create_task(on_audio(audio_bytes))
-    
-    def sync_on_transcript(role, text):
-        import asyncio
-        asyncio.create_task(on_transcript(role, text))
-    
+                # Persist first user question to DB (fire-and-forget)
+                if role == "user" and text and text.strip():
+                    user_msgs = [m for m in call_session.conversation_history if m.role == "user"]
+                    if len(user_msgs) == 1:
+                        asyncio.create_task(
+                            call_session_manager.update_first_question(
+                                call_session.session_id, text.strip()
+                            )
+                        )
+            send_queue.put_nowait({"type": "transcription", "role": role, "text": text})
+        except Exception:
+            pass
+
     def sync_on_error(error_msg):
-        import asyncio
-        asyncio.create_task(on_error(error_msg))
-    
+        try:
+            send_queue.put_nowait({"type": "error", "message": error_msg, "code": "openai_error"})
+        except Exception:
+            pass
+
     def sync_on_highlights(highlights):
-        import asyncio
-        asyncio.create_task(on_highlights(highlights))
+        try:
+            send_queue.put_nowait({"type": "highlights", "highlights": highlights})
+        except Exception:
+            pass
     
     try:
         while True:
             data = await websocket.receive_text()
-            logger.info(f"Received WebSocket message: {data[:100]}", session_id=session_id)
+            # Use debug for high-frequency audio messages to avoid log I/O bottleneck
+            logger.debug("Received WebSocket message", session_id=session_id)
             
             try:
                 message = json.loads(data)
@@ -620,7 +615,9 @@ async def websocket_voice_call(
                 continue
             
             msg_type = message.get("type", "")
-            logger.info(f"Processing message type: {msg_type}", session_id=session_id, msg_type=msg_type)
+            # Use debug for high-frequency audio_chunk messages
+            if msg_type != "audio_chunk":
+                logger.debug("Processing message type", session_id=session_id, msg_type=msg_type)
             
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -629,11 +626,12 @@ async def websocket_voice_call(
                 logger.info("Processing start_call request", session_id=session_id, user_id=user_id, document_id=document_id)
                 # Initialize the call
                 try:
-                    # Create call session with ownership validation
+                    # Create call session with ownership validation (use same session_id as WebSocket)
                     call_session = await call_session_manager.create_session(
                         user_id=user_id,
                         document_id=document_id,
                         voice_mode=VoiceMode.OPENAI_REALTIME,
+                        session_id=session_id,
                     )
                     
                     # Start OpenAI Realtime session
@@ -773,10 +771,21 @@ async def websocket_voice_call(
     except Exception as e:
         logger.error(f"Voice call WebSocket error: {e}")
     finally:
+        # Stop the ordered send worker
+        try:
+            send_queue.put_nowait(None)
+        except Exception:
+            pass
+        send_task.cancel()
+        try:
+            await send_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
         # Cleanup
         duration_seconds = 0
         questions_asked = 0
-        
+
         if openai_session:
             await openai_realtime_service.end_call(session_id)
         

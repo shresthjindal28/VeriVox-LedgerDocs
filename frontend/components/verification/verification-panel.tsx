@@ -3,19 +3,21 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { 
-  Shield, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  Shield,
+  CheckCircle,
+  XCircle,
+  Clock,
   ExternalLink,
   FileCheck,
   Link as LinkIcon,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Fingerprint
 } from 'lucide-react';
 import { useAuthStore } from '@/stores';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface BlockchainProof {
   proof_type: string;
@@ -60,10 +62,10 @@ export function VerificationPanel({ documentId, className }: VerificationPanelPr
 
   const fetchProofs = React.useCallback(async () => {
     if (!documentId || !accessToken) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/verify/document/${documentId}/proofs`,
@@ -73,11 +75,11 @@ export function VerificationPanel({ documentId, className }: VerificationPanelPr
           },
         }
       );
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch proofs');
       }
-      
+
       const data = await response.json();
       setProofs(data.proofs || []);
     } catch (err) {
@@ -117,158 +119,176 @@ export function VerificationPanel({ documentId, className }: VerificationPanelPr
   };
 
   return (
-    <div className={cn("rounded-lg border bg-card", className)}>
+    <div className={cn("overflow-hidden rounded-xl border border-white/5 bg-white/5 backdrop-blur-md", className)}>
       {/* Header */}
-      <div 
-        className="flex items-center justify-between p-4 cursor-pointer"
+      <div
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
           <div className={cn(
-            "p-2 rounded-full",
-            hasBlockchainVerification 
-              ? "bg-green-100 text-green-600" 
-              : "bg-amber-100 text-amber-600"
+            "p-2 rounded-lg ring-1 ring-inset shadow-lg",
+            hasBlockchainVerification
+              ? "bg-brand-500/20 text-brand-400 ring-brand-500/30"
+              : "bg-amber-500/20 text-amber-400 ring-amber-500/30"
           )}>
             <Shield className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="font-medium">Document Integrity</h3>
-            <p className="text-sm text-muted-foreground">
-              {hasBlockchainVerification 
-                ? 'Blockchain verified' 
+            <h3 className="font-medium text-white/90">Document Integrity</h3>
+            <p className="text-xs text-white/50">
+              {hasBlockchainVerification
+                ? 'Blockchain verified immutable record'
                 : 'Hash recorded locally'}
             </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3">
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
           ) : hasBlockchainVerification ? (
-            <CheckCircle className="h-5 w-5 text-green-500" />
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">
+              <CheckCircle className="h-3.5 w-3.5 text-brand-400" />
+              <span className="text-[10px] font-medium text-brand-300">Verified</span>
+            </div>
           ) : (
-            <Clock className="h-5 w-5 text-amber-500" />
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">
+              <FileCheck className="h-3.5 w-3.5 text-brand-400" />
+              <span className="text-[10px] font-medium text-brand-300">Recorded</span>
+            </div>
           )}
-          {isExpanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
+          <div className={cn("transition-transform duration-300", isExpanded && "rotate-180")}>
+            <ChevronDown className="h-4 w-4 text-white/40" />
+          </div>
         </div>
       </div>
 
       {/* Expanded Content */}
-      {isExpanded && (
-        <div className="border-t p-4 space-y-4">
-          {error ? (
-            <div className="flex items-center gap-2 text-destructive text-sm">
-              <XCircle className="h-4 w-4" />
-              {error}
-            </div>
-          ) : (
-            <>
-              {/* Document Hash */}
-              {documentProof && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <FileCheck className="h-4 w-4" />
-                    Document Hash
-                  </div>
-                  <code className="block p-2 bg-muted rounded text-xs font-mono break-all">
-                    {documentProof.hash_value}
-                  </code>
-                  <p className="text-xs text-muted-foreground">
-                    Recorded: {formatDate(documentProof.timestamp)}
-                  </p>
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="border-t border-white/5 bg-black/20"
+          >
+            <div className="p-4 space-y-5">
+              {error ? (
+                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                  <XCircle className="h-4 w-4" />
+                  {error}
                 </div>
-              )}
-
-              {/* Blockchain Details */}
-              {hasBlockchainVerification && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <LinkIcon className="h-4 w-4" />
-                    Blockchain Record
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Network:</span>
-                      <span className="ml-2">{getChainName(documentProof?.chain_id)}</span>
+              ) : (
+                <>
+                  {/* Document Hash */}
+                  {documentProof && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
+                        <Fingerprint className="h-3 w-3" />
+                        Digital Fingerprint (SHA-256)
+                      </div>
+                      <code className="block p-3 bg-black/40 rounded-lg text-xs font-mono text-brand-100/70 break-all border border-white/5">
+                        {documentProof.hash_value}
+                      </code>
+                      <p className="text-[11px] text-white/30 pl-1">
+                        Recorded: {formatDate(documentProof.timestamp)}
+                      </p>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Block:</span>
-                      <span className="ml-2">#{documentProof?.block_number}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono text-muted-foreground">
-                      Tx: {formatHash(documentProof?.tx_hash || '', 12)}
-                    </code>
-                    {getExplorerUrl(documentProof!) && (
-                      <a
-                        href={getExplorerUrl(documentProof!)!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {/* Other Proofs */}
-              {proofs.filter(p => p.proof_type !== 'document').length > 0 && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="text-sm font-medium">Additional Proofs</div>
-                  <div className="space-y-1">
-                    {proofs
-                      .filter(p => p.proof_type !== 'document')
-                      .map((proof, idx) => (
-                        <div 
-                          key={idx}
-                          className="flex items-center justify-between text-sm py-1"
-                        >
-                          <span className="capitalize text-muted-foreground">
-                            {proof.proof_type.replace('_', ' ')}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <code className="text-xs font-mono">
-                              {formatHash(proof.hash_value)}
-                            </code>
-                            {proof.verified ? (
-                              <CheckCircle className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Clock className="h-3 w-3 text-amber-500" />
-                            )}
-                          </div>
+                  {/* Blockchain Details */}
+                  {hasBlockchainVerification && (
+                    <div className="space-y-3 pt-3 border-t border-white/5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
+                        <LinkIcon className="h-3 w-3" />
+                        Blockchain Anchor
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                          <span className="text-[10px] text-white/40 block mb-0.5">Network</span>
+                          <span className="text-white/80 font-medium">{getChainName(documentProof?.chain_id)}</span>
                         </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+                        <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                          <span className="text-[10px] text-white/40 block mb-0.5">Block Height</span>
+                          <span className="font-mono text-brand-400">#{documentProof?.block_number}</span>
+                        </div>
+                      </div>
 
-              {/* Refresh Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchProofs}
-                disabled={isLoading}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                Refresh Status
-              </Button>
-            </>
-          )}
-        </div>
-      )}
+                      <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <span className="text-[10px] text-white/40">TX</span>
+                          <code className="text-xs font-mono text-white/60 truncate">
+                            {formatHash(documentProof?.tx_hash || '', 16)}
+                          </code>
+                        </div>
+                        {getExplorerUrl(documentProof!) && (
+                          <a
+                            href={getExplorerUrl(documentProof!)!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[10px] font-medium text-brand-400 hover:text-brand-300 transition-colors bg-brand-500/10 px-2 py-1 rounded"
+                          >
+                            View
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Proofs */}
+                  {proofs.filter(p => p.proof_type !== 'document').length > 0 && (
+                    <div className="space-y-2 pt-3 border-t border-white/5">
+                      <div className="text-xs font-semibold text-white/40 uppercase tracking-wider">Additional Proofs</div>
+                      <div className="space-y-2">
+                        {proofs
+                          .filter(p => p.proof_type !== 'document')
+                          .map((proof, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between text-xs py-2 px-3 bg-white/5 rounded-lg border border-white/5"
+                            >
+                              <span className="capitalize text-white/70 font-medium">
+                                {proof.proof_type.replace('_', ' ')}
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <code className="text-[10px] font-mono text-white/40">
+                                  {formatHash(proof.hash_value)}
+                                </code>
+                                {proof.verified ? (
+                                  <CheckCircle className="h-3 w-3 text-brand-400" />
+                                ) : (
+                                  <Clock className="h-3 w-3 text-amber-500" />
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Refresh Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchProofs}
+                    disabled={isLoading}
+                    className="w-full text-xs h-8 bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10 hover:border-white/20"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                    ) : null}
+                    Refresh Verification
+                  </Button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -279,20 +299,20 @@ export function VerificationPanel({ documentId, className }: VerificationPanelPr
 export function VerificationBadge({ verified }: { verified?: boolean }) {
   return (
     <div className={cn(
-      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs",
-      verified 
-        ? "bg-green-100 text-green-700" 
-        : "bg-muted text-muted-foreground"
+      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset shadow-sm",
+      verified
+        ? "bg-brand-500/10 text-brand-300 ring-brand-500/20"
+        : "bg-white/5 text-white/40 ring-white/10"
     )}>
       {verified ? (
         <>
-          <CheckCircle className="h-3 w-3" />
+          <Shield className="h-3 w-3 text-brand-400" />
           Verified
         </>
       ) : (
         <>
-          <Shield className="h-3 w-3" />
-          Recorded
+          <Clock className="h-3 w-3" />
+          Pending
         </>
       )}
     </div>

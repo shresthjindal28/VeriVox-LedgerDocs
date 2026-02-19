@@ -600,6 +600,31 @@ class BlockchainService:
         key = f"{ProofType.DOCUMENT.value}:{document_id}"
         proof = self._proofs.get(key)
         
+        # If not in memory, try loading from database
+        if not proof and supabase.is_available():
+            try:
+                result = supabase.client.table("blockchain_proofs").select("*").eq(
+                    "document_id", document_id
+                ).eq("proof_type", "document").limit(1).execute()
+                
+                if result.data and len(result.data) > 0:
+                    row = result.data[0]
+                    proof = BlockchainProof(
+                        proof_type=ProofType.DOCUMENT,
+                        hash_value=row.get("hash_value", ""),
+                        document_id=document_id,
+                        user_id=row.get("user_id"),
+                        timestamp=row.get("timestamp") or row.get("created_at", ""),
+                        tx_hash=row.get("tx_hash"),
+                        block_number=row.get("block_number"),
+                        chain_id=self.chain_id,
+                        verified=row.get("verified", False),
+                        metadata=row.get("metadata", {}),
+                    )
+                    self._proofs[key] = proof
+            except Exception as e:
+                logger.warning(f"Failed to load proof from database: {e}")
+        
         if not proof:
             return {
                 "verified": False,
@@ -644,17 +669,61 @@ class BlockchainService:
         """
         Get all proofs for a document.
         
+        Loads from both in-memory cache and persistent database.
+        
         Args:
             document_id: Document ID
             
         Returns:
             List of proof dictionaries
         """
-        proofs = []
+        # First collect in-memory proofs
+        proofs_map: Dict[str, Dict] = {}
         for key, proof in self._proofs.items():
             if proof.document_id == document_id:
-                proofs.append(proof.to_dict())
-        return proofs
+                proofs_map[f"{proof.proof_type.value}:{proof.timestamp}"] = proof.to_dict()
+        
+        # Then try loading from database
+        if supabase.is_available():
+            try:
+                result = supabase.client.table("blockchain_proofs").select("*").eq(
+                    "document_id", document_id
+                ).execute()
+                
+                if result.data:
+                    for row in result.data:
+                        key = f"{row.get('proof_type', '')}:{row.get('timestamp', '')}"
+                        if key not in proofs_map:
+                            proofs_map[key] = {
+                                "proof_type": row.get("proof_type"),
+                                "hash_value": row.get("hash_value"),
+                                "document_id": row.get("document_id"),
+                                "session_id": row.get("session_id"),
+                                "user_id": row.get("user_id"),
+                                "timestamp": row.get("timestamp") or row.get("created_at", ""),
+                                "tx_hash": row.get("tx_hash"),
+                                "block_number": row.get("block_number"),
+                                "chain_id": self.chain_id,
+                                "verified": row.get("verified", False),
+                                "metadata": row.get("metadata", {}),
+                            }
+                            # Also populate in-memory cache
+                            self._proofs[f"{row.get('proof_type', 'document')}:{document_id}"] = BlockchainProof(
+                                proof_type=ProofType(row.get("proof_type", "document")),
+                                hash_value=row.get("hash_value", ""),
+                                document_id=document_id,
+                                user_id=row.get("user_id"),
+                                timestamp=row.get("timestamp") or row.get("created_at", ""),
+                                tx_hash=row.get("tx_hash"),
+                                block_number=row.get("block_number"),
+                                chain_id=self.chain_id,
+                                verified=row.get("verified", False),
+                                metadata=row.get("metadata", {}),
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to load proofs from database: {e}")
+        
+        return list(proofs_map.values())
     
     async def get_session_proofs(self, session_id: str) -> List[Dict]:
         """
@@ -709,24 +778,57 @@ class BlockchainService:
     async def _persist_proof(self, proof: BlockchainProof) -> None:
         """Persist proof to database."""
         if not supabase.is_available():
+            logger.debug("Supabase not available, skipping proof persistence")
             return
         
         try:
             proof_dict = proof.to_dict()
-            supabase.client.table("blockchain_proofs").insert({
+            
+            # Validate user_id is a proper UUID (required by FK constraint)
+            user_id = proof_dict.get("user_id")
+            if user_id:
+                try:
+                    import uuid as _uuid
+                    _uuid.UUID(str(user_id))
+                except (ValueError, AttributeError):
+                    logger.warning(
+                        f"Invalid user_id for proof persistence: '{user_id}' "
+                        f"(not a UUID). Skipping DB insert. Proof type: {proof_dict['proof_type']}"
+                    )
+                    return
+            else:
+                logger.warning(
+                    f"No user_id for proof persistence. Skipping DB insert. "
+                    f"Proof type: {proof_dict['proof_type']}, doc: {proof_dict.get('document_id')}"
+                )
+                return
+            
+            insert_data = {
                 "proof_type": proof_dict["proof_type"],
                 "hash_value": proof_dict["hash_value"],
                 "document_id": proof_dict.get("document_id"),
                 "session_id": proof_dict.get("session_id"),
-                "user_id": proof_dict.get("user_id"),
+                "user_id": str(user_id),
                 "tx_hash": proof_dict.get("tx_hash"),
                 "block_number": proof_dict.get("block_number"),
                 "verified": proof_dict.get("verified", False),
-                "timestamp": proof_dict.get("timestamp"),
                 "metadata": proof_dict.get("metadata", {}),
-            }).execute()
+            }
+            
+            # Only include timestamp if provided (otherwise DB uses DEFAULT NOW())
+            ts = proof_dict.get("timestamp")
+            if ts:
+                insert_data["timestamp"] = ts
+            
+            result = supabase.client.table("blockchain_proofs").insert(insert_data).execute()
+            logger.info(
+                f"Proof persisted to database: type={proof_dict['proof_type']}, "
+                f"doc={proof_dict.get('document_id', 'N/A')}"
+            )
         except Exception as e:
-            logger.warning(f"Failed to persist proof: {e}")
+            logger.warning(f"Failed to persist proof to database: {e}")
+            logger.debug(f"Proof data that failed: {proof_dict}")
+
     
     async def _verify_on_chain(self, proof: BlockchainProof) -> bool:
         """

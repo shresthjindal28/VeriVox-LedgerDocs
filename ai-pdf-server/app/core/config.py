@@ -81,6 +81,9 @@ class Settings:
         self.SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
         self.SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 
+        # User-Service URL (for document ownership registration)
+        self.USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
+
         # Storage paths
         self.UPLOAD_DIR: Path = UPLOAD_DIR
         self.INDEX_DIR: Path = INDEX_DIR

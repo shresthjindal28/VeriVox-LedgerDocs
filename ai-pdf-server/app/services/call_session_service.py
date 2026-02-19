@@ -102,6 +102,8 @@ class CallSession:
             audio_duration_ms=audio_duration_ms,
             sources=sources or []
         ))
+        if role == "user":
+            self.question_count += 1
         self.update_activity()
         
         # Limit history to last 20 messages to prevent memory bloat
@@ -185,7 +187,8 @@ class CallSessionManager:
         self,
         user_id: str,
         document_id: str,
-        voice_mode: VoiceMode = VoiceMode.OPENAI_REALTIME
+        voice_mode: VoiceMode = VoiceMode.OPENAI_REALTIME,
+        session_id: Optional[str] = None,
     ) -> CallSession:
         """
         Create a new call session.
@@ -194,6 +197,7 @@ class CallSessionManager:
             user_id: Authenticated user ID
             document_id: Document to discuss
             voice_mode: Voice processing mode
+            session_id: Optional session ID (used when caller provides one, e.g. WebSocket)
         
         Returns:
             New CallSession
@@ -221,10 +225,10 @@ class CallSessionManager:
                 "Only the document owner can start a voice call."
             )
         
-        # Create session
-        session_id = str(uuid.uuid4())
+        # Create session (use provided session_id if any, e.g. from WebSocket)
+        sid = session_id or str(uuid.uuid4())
         session = CallSession(
-            session_id=session_id,
+            session_id=sid,
             user_id=user_id,
             document_id=document_id,
             voice_mode=voice_mode,
@@ -232,17 +236,17 @@ class CallSessionManager:
         )
         
         # Track session
-        self.sessions[session_id] = session
+        self.sessions[sid] = session
         if user_id not in self.user_sessions:
             self.user_sessions[user_id] = []
-        self.user_sessions[user_id].append(session_id)
+        self.user_sessions[user_id].append(sid)
         
         # Persist to database
         await self._persist_session_create(session)
         
         logger.info(
             "Created call session",
-            session_id=session_id,
+            session_id=sid,
             user_id=user_id,
             document_id=document_id,
             voice_mode=voice_mode.value
@@ -314,6 +318,20 @@ class CallSessionManager:
             if sid in self.sessions
         ]
     
+    async def update_first_question(self, session_id: str, first_question: str) -> bool:
+        """Update the first question for a session (only if not yet set)."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+        # Only persist first user message
+        user_messages = [m for m in session.conversation_history if m.role == "user"]
+        if len(user_messages) != 1:
+            return False
+        if not first_question or not first_question.strip():
+            return False
+        await self._persist_first_question(session_id, first_question.strip())
+        return True
+
     async def activate_session(self, session_id: str) -> None:
         """Mark a session as active after successful initialization."""
         session = self.sessions.get(session_id)
@@ -467,11 +485,24 @@ class CallSessionManager:
                 "question_count": session.question_count,
                 "transcript_status": "pending",
                 "verification_status": "pending",
+                "first_question": None,
                 "metadata": {}
             }).execute()
         except Exception as e:
             logger.warning(f"Failed to persist session creation: {e}")
-    
+
+    async def _persist_first_question(self, session_id: str, first_question: str) -> None:
+        """Persist the first question for a session to the database."""
+        if not supabase.is_available():
+            return
+        try:
+            supabase.client.table("voice_sessions").update({
+                "first_question": first_question[:2000],  # Cap length
+            }).eq("session_id", session_id).execute()
+            logger.info(f"Persisted first question for session {session_id[:8]}...")
+        except Exception as e:
+            logger.warning(f"Failed to persist first question: {e}")
+
     async def _persist_session_update(self, session: CallSession) -> None:
         """Persist session state update to database."""
         if not supabase.is_available():

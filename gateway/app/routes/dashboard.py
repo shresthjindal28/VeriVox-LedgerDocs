@@ -43,6 +43,15 @@ async def get_recent_sessions(request: Request, auth_headers: dict = Depends(get
     )
 
 
+@router.get("/extractions/recent", summary="Get recent RAG extractions")
+async def get_recent_extractions(request: Request, auth_headers: dict = Depends(get_auth_headers)) -> Response:
+    """Get recent RAG extraction runs for the current user."""
+    return await proxy_service.proxy_request(
+        request, "pdf", "/api/dashboard/extractions/recent",
+        extra_headers=auth_headers
+    )
+
+
 @router.get("/blockchain/proofs", summary="Get blockchain proofs")
 async def get_blockchain_proofs(request: Request, auth_headers: dict = Depends(get_auth_headers)) -> Response:
     """Get blockchain proofs for the current user."""

@@ -119,12 +119,13 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 def register_routes(app: FastAPI) -> None:
     """Register API routes."""
-    from app.api.routes import auth, oauth, profile, internal
+    from app.api.routes import auth, oauth, profile, internal, avatar
     
     # Include routers with /api prefix
     app.include_router(auth.router, prefix="/api")
     app.include_router(oauth.router, prefix="/api")
     app.include_router(profile.router, prefix="/api")
+    app.include_router(avatar.router, prefix="/api")
     
     # Internal routes (no /api prefix, for service-to-service)
     app.include_router(internal.router)

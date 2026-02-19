@@ -1,11 +1,13 @@
 """Document upload and management routes."""
 
+from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
+from app.core.supabase import supabase
 from app.core.security import integrity_service
 from app.models.schemas import (
     DeleteResponse,
@@ -19,6 +21,7 @@ from app.models.schemas import (
 from app.services.embedding_service import embedding_service
 from app.services.pdf_service import pdf_service
 from app.services.vector_service import vector_store
+from app.services.blockchain_service import blockchain_service
 from app.utils.helpers import get_logger, get_utc_timestamp
 
 logger = get_logger(__name__)
@@ -33,7 +36,7 @@ router = APIRouter(tags=["Documents"])
     summary="Upload a PDF document",
     description="Upload a PDF file for processing. The document will be extracted, chunked, embedded, and indexed.",
 )
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
     """
     Upload and process a PDF document.
 
@@ -124,6 +127,59 @@ async def upload_pdf(file: UploadFile = File(...)):
             file_size_bytes=len(file_bytes),
         )
 
+        # Create blockchain integrity proof for this document
+        try:
+            user_id_for_proof = (
+                request.headers.get("x-user-id")
+                or request.headers.get("X-User-ID")
+                or "anonymous"
+            )
+            await blockchain_service.store_document_proof(
+                document_id=document_id,
+                document_bytes=file_bytes,
+                user_id=str(user_id_for_proof).strip(),
+                filename=file.filename,
+            )
+            logger.info("Blockchain proof created", document_id=document_id)
+        except Exception as e:
+            logger.warning("Blockchain proof creation failed (non-fatal)", error=str(e))
+
+        # Register document ownership in Supabase (same DB dashboard reads from)
+        user_id = (
+            request.headers.get("x-user-id")
+            or request.headers.get("X-User-ID")
+            or ""
+        )
+        user_id = str(user_id).strip()
+        if not user_id:
+            logger.warning(
+                "No X-User-ID header on upload - ensure requests go through gateway with auth"
+            )
+        elif not supabase.is_available():
+            logger.warning(
+                "Supabase not configured - set SUPABASE_URL and SUPABASE_SERVICE_KEY in ai-pdf-server"
+            )
+        else:
+            try:
+                supabase.client.table("document_ownership").upsert(
+                    {
+                        "document_id": document_id,
+                        "user_id": user_id,
+                        "filename": file.filename,
+                    }
+                ).execute()
+                logger.info(
+                    "Registered document ownership",
+                    document_id=document_id,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Could not register document ownership",
+                    document_id=document_id,
+                    error=str(e),
+                )
+
         logger.info(
             "Document uploaded successfully",
             document_id=document_id,
@@ -153,17 +209,53 @@ async def upload_pdf(file: UploadFile = File(...)):
 @router.get(
     "/documents",
     response_model=DocumentListResponse,
-    summary="List all documents",
-    description="Get a list of all uploaded documents with their metadata.",
+    summary="List user documents",
+    description="Get documents owned by the current user (excludes soft-deleted).",
 )
-async def list_documents():
-    """List all documents in the system."""
+async def list_documents(request: Request):
+    """List documents for the authenticated user from document_ownership."""
     try:
-        documents = await vector_store.list_documents()
-        return DocumentListResponse(
-            documents=documents,
-            total_count=len(documents),
-        )
+        user_id = request.headers.get("x-user-id") or request.headers.get("X-User-ID")
+        if not user_id:
+            return DocumentListResponse(documents=[], total_count=0)
+
+        if not supabase.is_available():
+            documents = await vector_store.list_documents()
+            return DocumentListResponse(documents=documents, total_count=len(documents))
+
+        result = supabase.client.table("document_ownership").select(
+            "document_id, filename, created_at"
+        ).eq("user_id", user_id.strip()).eq("is_deleted", False).order(
+            "created_at", desc=True
+        ).execute()
+
+        rows = result.data or []
+        documents = []
+        for row in rows:
+            doc_id = row.get("document_id")
+            filename = row.get("filename") or "Document"
+            created_at = row.get("created_at") or ""
+            metadata = None
+            try:
+                metadata = await vector_store.get_document_metadata(doc_id)
+            except Exception:
+                pass
+            try:
+                ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")) if created_at else datetime.utcnow()
+            except Exception:
+                ts = datetime.utcnow()
+            doc = DocumentMetadata(
+                document_id=doc_id,
+                filename=filename,
+                upload_timestamp=ts,
+                sha256_hash="",
+                page_count=getattr(metadata, "page_count", 0) if metadata else 0,
+                chunk_count=getattr(metadata, "chunk_count", 0) if metadata else 0,
+                file_size_bytes=getattr(metadata, "file_size_bytes", 0) if metadata else 0,
+            )
+            documents.append(doc)
+
+        return DocumentListResponse(documents=documents, total_count=len(documents))
     except Exception as e:
         logger.error("Failed to list documents", error=str(e))
         raise HTTPException(
@@ -305,13 +397,10 @@ async def verify_document_integrity(request: IntegrityVerifyRequest):
 )
 async def delete_document(document_id: str):
     """
-    Delete a document completely.
+    Delete a document (soft delete in ownership, physical delete of data).
 
-    Removes:
-    - Vector embeddings
-    - Document metadata
-    - Stored PDF file
-    - Integrity hash record
+    - Sets is_deleted=true in document_ownership (hides from UI)
+    - Removes vector embeddings, PDF file, integrity record
     """
     # Check if document exists
     exists = await vector_store.document_exists(document_id)
@@ -321,13 +410,23 @@ async def delete_document(document_id: str):
             detail=f"Document not found: {document_id}",
         )
 
-    # Delete from vector store
+    # Soft-delete in User-Service (document_ownership.is_deleted = true)
+    try:
+        import httpx
+        user_svc = settings.USER_SERVICE_URL.rstrip("/")
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{user_svc}/internal/documents/{document_id}/ownership",
+                timeout=5.0,
+            )
+            if resp.status_code not in (200, 404):
+                logger.warning(f"User-Service soft-delete returned {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"Could not soft-delete ownership (non-fatal): {e}")
+
+    # Physical delete from vector store, PDF, integrity
     await vector_store.delete_document(document_id)
-
-    # Delete PDF file
     await pdf_service.delete_pdf(document_id)
-
-    # Delete integrity record
     await integrity_service.delete_record(document_id)
 
     logger.info("Document deleted", document_id=document_id)
